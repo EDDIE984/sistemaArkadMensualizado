@@ -1,0 +1,4 @@
+monto_desde,monto_hasta,nivel_riesgo
+0,20000,1
+20001,30000,2
+30001,,3
