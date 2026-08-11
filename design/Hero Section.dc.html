@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+<template id="__bundler_thumbnail" data-bg-color="#0a0a0a">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#0a0a0a"/>
+    <text x="600" y="380" font-family="sans-serif" font-size="90" font-weight="700" fill="#ffffff" text-anchor="middle">PulseIQ</text>
+    <text x="600" y="460" font-family="sans-serif" font-size="34" fill="#bbbbbb" text-anchor="middle">Hero Section</text>
+  </svg>
+</template>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #0a0a0a; }
+    a { color: inherit; text-decoration: none; }
+    a:hover { opacity: 0.75; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes navDrop { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes zoomFade { from { opacity: 0; transform: scale(1.08); } to { opacity: 1; transform: scale(1); } }
+    @media (max-width: 860px) {
+      .navLinks { display: none !important; }
+      .heroHeadline { font-size: 42px !important; }
+      .statsRow { grid-template-columns: repeat(3, 1fr) !important; gap: 18px !important; }
+      .statNum { font-size: 26px !important; }
+      .heroPad { padding: 0 20px !important; }
+      .ctaRow { flex-wrap: wrap; }
+    }
+  </style>
+</helmet>
+
+<section style="{{ sectionStyle }}">
+  <div style="{{ videoWrapStyle }}">
+    <video src="https://res.cloudinary.com/urml6fcu/video/upload/kling_20260810_Image_to_Video_Hand_holdi_2841_0.mp4" style="{{ iframeStyle }}" autoplay="true" loop="true" muted="true" playsinline="true"></video>
+  </div>
+
+  <div style="{{ overlayStyle }}"></div>
+
+  <nav style="{{ navStyle }}" class="heroPad">
+    <div style="{{ logoRowStyle }}">
+      <span style="{{ logoDotStyle }}"></span>
+      <span style="{{ logoTextStyle }}">PulseIQ</span>
+    </div>
+    <div style="{{ navLinksStyle }}" class="navLinks">
+      <a href="#" style="{{ navLinkStyle }}">Nosotros</a>
+      <a href="#" style="{{ navLinkStyle }}">Insights</a>
+      <a href="#" style="{{ navLinkStyle }}">Reportes</a>
+      <a href="#" style="{{ navLinkStyle }}">Integraciones</a>
+      <a href="#" style="{{ navLinkStyle }}">Precios</a>
+    </div>
+    <a href="#" style="{{ contactBtnStyle }}">Contacto</a>
+  </nav>
+
+  <div style="{{ contentStyle }}" class="heroPad">
+    <h1 style="{{ headlineStyle }}" class="heroHeadline">
+      <span style="{{ lineStyle1 }}">Insights más inteligentes</span>
+      <span style="{{ lineStyle2 }}">Para un mejor</span>
+      <span style="{{ lineStyle3 }}">rendimiento</span>
+    </h1>
+    <p style="{{ subtextStyle }}">Rastrea ingresos, clics, interacción y conversiones en un panel potente y fácil de usar, hecho para creadores y emprendedores.</p>
+
+    <div style="{{ ctaRowStyle }}" class="ctaRow">
+      <a href="#" style="{{ primaryBtnStyle }}">Empezar a analizar</a>
+      <a href="#" style="{{ secondaryBtnStyle }}">Ver demo</a>
+    </div>
+
+    <div style="{{ ratingRowStyle }}">
+      <span style="{{ starsStyle }}">★★★★★</span>
+      <span style="{{ ratingTextStyle }}">5.0 &nbsp;|&nbsp; Nuevas calificaciones de usuarios</span>
+    </div>
+
+    <div style="{{ statsRowStyle }}" class="statsRow">
+      <div style="{{ statBlockStyle }}">
+        <div style="{{ statNumStyle }}" class="statNum">83%</div>
+        <div style="{{ statLabelStyle }}">Toman decisiones más rápido</div>
+      </div>
+      <div style="{{ statBlockStyle }}">
+        <div style="{{ statNumStyle }}" class="statNum">52%</div>
+        <div style="{{ statLabelStyle }}">Monitorean conversiones</div>
+      </div>
+      <div style="{{ statBlockStyle }}">
+        <div style="{{ statNumStyle }}" class="statNum">41%</div>
+        <div style="{{ statLabelStyle }}">Exportan reportes</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const font = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
+    return {
+      sectionStyle: {
+        position: 'relative', width: '100%', height: '100vh',
+        overflow: 'hidden', display: 'flex', flexDirection: 'column',
+        fontFamily: font, background: '#0a0a0a',
+      },
+      videoWrapStyle: {
+        position: 'absolute', inset: 0, width: '100%', height: '100%',
+        overflow: 'hidden', animation: 'zoomFade 1.6s ease-out both',
+      },
+      iframeStyle: {
+        position: 'absolute', top: '50%', left: '50%',
+        width: '100%', height: '100%', minWidth: '100%', minHeight: '100%',
+        transform: 'translate(-50%, -50%)', objectFit: 'cover', objectPosition: 'center',
+        border: 'none', pointerEvents: 'none', background: '#0a0a0a',
+      },
+      overlayStyle: {
+        position: 'absolute', inset: 0,
+        background: 'linear-gradient(100deg, rgba(6,6,8,0.82) 0%, rgba(6,6,8,0.62) 32%, rgba(6,6,8,0.28) 55%, rgba(6,6,8,0.15) 75%, rgba(6,6,8,0.35) 100%)',
+        animation: 'fadeIn 1.2s ease-out both',
+      },
+      navStyle: {
+        position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', padding: '20px 56px 0', flexShrink: 0,
+        animation: 'navDrop 0.8s cubic-bezier(0.16,1,0.3,1) both',
+      },
+      logoRowStyle: { display: 'flex', alignItems: 'center', gap: '10px' },
+      logoDotStyle: { width: '9px', height: '9px', borderRadius: '50%', background: '#fff' },
+      logoTextStyle: { fontSize: '17px', fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' },
+      navLinksStyle: { display: 'flex', alignItems: 'center', gap: '32px' },
+      navLinkStyle: { fontSize: '14.5px', fontWeight: 500, color: 'rgba(255,255,255,0.85)' },
+      contactBtnStyle: {
+        background: '#fff', color: '#0a0a0a', fontSize: '14px', fontWeight: 600,
+        padding: '10px 22px', borderRadius: '999px',
+      },
+      contentStyle: {
+        position: 'relative', zIndex: 2, flex: 1, display: 'flex', flexDirection: 'column',
+        justifyContent: 'center', padding: '0 56px', maxWidth: '600px',
+        gap: '18px', minHeight: 0, overflow: 'hidden',
+      },
+      headlineStyle: {
+        margin: 0, display: 'flex', flexDirection: 'column',
+        fontSize: '48px', lineHeight: 1.08, fontWeight: 700, letterSpacing: '-0.02em', color: '#fff',
+      },
+      lineStyle1: { animation: 'fadeUp 0.9s cubic-bezier(0.16,1,0.3,1) 0.15s both' },
+      lineStyle2: { animation: 'fadeUp 0.9s cubic-bezier(0.16,1,0.3,1) 0.28s both' },
+      lineStyle3: { animation: 'fadeUp 0.9s cubic-bezier(0.16,1,0.3,1) 0.41s both' },
+      subtextStyle: {
+        margin: 0, fontSize: '15.5px', lineHeight: 1.5, color: 'rgba(255,255,255,0.75)',
+        maxWidth: '480px', fontWeight: 400,
+        animation: 'fadeUp 0.9s cubic-bezier(0.16,1,0.3,1) 0.55s both',
+      },
+      ctaRowStyle: {
+        display: 'flex', alignItems: 'center', gap: '14px',
+        animation: 'fadeUp 0.9s cubic-bezier(0.16,1,0.3,1) 0.68s both',
+      },
+      primaryBtnStyle: {
+        background: '#fff', color: '#0a0a0a', fontSize: '14px', fontWeight: 600,
+        padding: '12px 24px', borderRadius: '999px', display: 'inline-block',
+      },
+      secondaryBtnStyle: {
+        background: 'rgba(255,255,255,0.08)', color: '#fff', fontSize: '14px', fontWeight: 600,
+        padding: '12px 24px', borderRadius: '999px', border: '1px solid rgba(255,255,255,0.35)',
+        display: 'inline-block',
+      },
+      ratingRowStyle: {
+        display: 'flex', alignItems: 'center', gap: '10px',
+        animation: 'fadeUp 0.9s cubic-bezier(0.16,1,0.3,1) 0.8s both',
+      },
+      starsStyle: { color: '#fff', fontSize: '15px', letterSpacing: '2px' },
+      ratingTextStyle: { fontSize: '14px', color: 'rgba(255,255,255,0.7)', fontWeight: 500 },
+      statsRowStyle: {
+        display: 'grid', gridTemplateColumns: 'repeat(3, auto)', gap: '32px',
+        marginTop: '0', animation: 'fadeUp 0.9s cubic-bezier(0.16,1,0.3,1) 0.92s both',
+      },
+      statBlockStyle: { display: 'flex', flexDirection: 'column', gap: '2px' },
+      statNumStyle: { fontSize: '24px', fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' },
+      statLabelStyle: { fontSize: '12.5px', color: 'rgba(255,255,255,0.65)', fontWeight: 500 },
+    };
+  }
+}
+</script>
+</body>
+</html>
