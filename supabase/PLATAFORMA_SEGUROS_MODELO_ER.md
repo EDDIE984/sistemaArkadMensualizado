@@ -32,8 +32,18 @@ sus propios productos de seguro vehicular. Cada aseguradora:
    crea las credenciales de sus `USUARIO_CANAL` (agentes/brokers).
 2. **Clientes finales** (`CLIENTE`): se **autoregistran** en la plataforma
    (flujo inicial: tipo INDIVIDUAL) para poder solicitar cotizaciones
-   directamente, sin depender de un canal. El cliente **no pertenece a una
-   aseguradora** — es de la plataforma y puede cotizar con varias.
+   directamente, sin depender de un canal. El registro comienza con nombre y
+   correo en `REGISTRO_CLIENTE_PENDIENTE`; el correo se confirma mediante un
+   token temporal de un solo uso y solo entonces el cliente define su
+   contraseña y se crea `CLIENTE`. La identificación y el resto del perfil se
+   completan después y son obligatorios antes de cotizar. El cliente **no
+   pertenece a una aseguradora** — es de la plataforma y puede cotizar con
+   varias.
+
+La autenticación es propia de la aplicación: las contraseñas se almacenan
+exclusivamente como hash Argon2id, los tokens de activación y sesión se guardan
+hasheados, y las sesiones se transportan mediante cookies `HttpOnly`, `Secure`
+en producción y `SameSite=Lax`. No se usa Supabase Auth.
 
 **Flujo end-to-end:**
 ```
@@ -387,7 +397,7 @@ erDiagram
         uuid id PK
         string tipo_cliente "INDIVIDUAL | EMPRESA"
         string nombre_razon_social
-        string identificacion "cedula | ruc"
+        string identificacion "cedula | ruc; nullable hasta completar perfil"
         string email
         string password_hash
         string telefono
@@ -398,7 +408,44 @@ erDiagram
         string estado_civil "solo individual"
         string representante_legal "solo empresa"
         boolean activo
+        string estado_registro "ACTIVO|BLOQUEADO"
+        timestamp email_verificado_en
+        int intentos_fallidos
+        timestamp bloqueado_hasta
+        timestamp ultimo_acceso_en
         timestamp fecha_registro
+    }
+
+    REGISTRO_CLIENTE_PENDIENTE {
+        uuid id PK
+        string nombre
+        string email
+        string estado "PENDIENTE_CONFIRMACION|COMPLETADO|EXPIRADO|CANCELADO"
+        int intentos_envio
+        timestamp ultimo_envio_en
+        timestamp expira_en
+        timestamp creado_en
+    }
+
+    TOKEN_ACTIVACION {
+        uuid id PK
+        uuid registro_pendiente_id FK
+        string token_hash
+        timestamp expira_en
+        timestamp usado_en
+        timestamp creado_en
+    }
+
+    SESION_AUTENTICACION {
+        uuid id PK
+        string token_hash
+        string tipo_actor "CLIENTE|USUARIO"
+        uuid cliente_id FK
+        uuid usuario_id FK
+        timestamp expira_en
+        timestamp ultimo_uso_en
+        timestamp revocado_en
+        timestamp creado_en
     }
 
     VEHICULO {
@@ -425,6 +472,9 @@ erDiagram
         uuid ciudad_id FK
         string origen "AUTOGESTION | CANAL"
         int anios_vigencia
+        date fecha_inicio_vigencia "obligatoria para origen CANAL"
+        date fecha_fin_vigencia "calculada: inicio + años - 1 día"
+        int total_dias "diferencia inclusiva entre las fechas"
         decimal tasa_promedio
         int nivel_riesgo
         decimal cuota_fija_mensual
@@ -517,9 +567,15 @@ que debe usar Claude Code para implementar el motor de cotización — el orden
 importa y no debe alterarse.
 
 1. **Registro / login del cliente** — Si es la primera vez, se crea un
-   registro en `CLIENTE` (`tipo_cliente=INDIVIDUAL`, `email`,
-   `password_hash`). Si ya existe, solo se valida el login contra esa misma
-   tabla. Este paso no depende de ninguna aseguradora.
+   `REGISTRO_CLIENTE_PENDIENTE` con nombre y correo y se envía un enlace de
+   confirmación respaldado por un `TOKEN_ACTIVACION` hasheado, de un solo uso
+   y con expiración. Al abrir un token válido, el cliente define su contraseña;
+   el backend guarda únicamente su hash Argon2id, crea `CLIENTE` con
+   `tipo_cliente=INDIVIDUAL`, marca el correo como verificado e invalida el
+   token dentro de la misma transacción. La identificación y demás datos del
+   perfil se solicitan después, pero deben completarse antes de cotizar. Si ya
+   existe, se valida el hash y se crea una `SESION_AUTENTICACION` cuyo token
+   también se guarda hasheado. Este paso no depende de ninguna aseguradora.
 
 2. **Explorar aseguradoras, ramos y productos disponibles** — Se consulta
    `ASEGURADORA` (activas) → `ASEGURADORA_RAMO` (ramos que esa aseguradora
@@ -581,8 +637,27 @@ Si quien cotiza es un `USUARIO_CANAL` (no el cliente directo), el paso 1
 cambia: el agente ya está autenticado como `USUARIO`, y en el paso 2 él
 busca o crea el `CLIENTE` (con o sin login propio). En ese caso,
 `COTIZACION.usuario_id` queda con el id del agente y
-`COTIZACION.origen = CANAL`. Si fue el propio cliente quien cotizó solo,
+`COTIZACION.canal_id` conserva el canal de origen y
+`COTIZACION.origen = CANAL`. El agente solo puede usar productos cuyo
+`PRODUCTO.canal_id` coincida con el canal de su sesión. Si fue el propio cliente quien cotizó solo,
 `usuario_id` queda `NULL` y `origen = AUTOGESTION`.
+
+Para una cotización de canal, el agente ingresa únicamente
+`fecha_inicio_vigencia` y selecciona `anios_vigencia` (1–5). El sistema
+calcula `fecha_fin_vigencia = fecha_inicio_vigencia + anios_vigencia años -
+1 día` y `total_dias` contando ambas fechas. La fecha inicial debe estar entre
+la fecha actual y 90 días en el futuro. La fecha final no es editable. Esto
+garantiza siempre 12, 24, 36, 48 o 60 períodos completos, por lo que las
+fórmulas mensuales, tasas por año, depreciación y nivelación no se prorratean
+ni cambian. Estas fechas se copian a `POLIZA` al momento de emitirla.
+
+Cuando el agente crea un cliente sin acceso propio, `CLIENTE.password_hash`
+queda `NULL` y `estado_registro = SIN_ACCESO`; esto permite cotizar, pero no
+iniciar sesión. `CANAL_CLIENTE` registra la relación operativa para que el
+canal pueda volver a encontrar a ese cliente sin exponer el catálogo global.
+Los clientes existentes solo se vinculan mediante coincidencia exacta de
+identificación o correo. Una futura invitación verificada podrá establecer la
+contraseña y cambiar el estado a `ACTIVO`.
 
 ```mermaid
 sequenceDiagram
@@ -637,19 +712,33 @@ sequenceDiagram
    `ADMIN_ASEGURADORA` crea `USUARIO_CANAL` de su propia aseguradora/canal →
    `CLIENTE` se autoregistra sin intervención de nadie (tipo INDIVIDUAL en la
    primera fase).
-5. **`COTIZACION.usuario_id` nullable** distingue autogestión (cliente solo)
-   de asistida (agente de canal) vía el campo `origen`.
-6. **`POLIZA` sólo existe si `COTIZACION.estado = ACEPTADA`** (relación 1:1
+   El autorregistro público nunca permite escoger un perfil interno: siempre
+   produce un `CLIENTE` `INDIVIDUAL`.
+5. **Activación y sesiones propias**: los enlaces de activación son aleatorios,
+   expiran, solo pueden usarse una vez y se almacenan como hash. Las
+   contraseñas usan Argon2id y las sesiones opacas se envían únicamente en
+   cookies protegidas; ningún secreto de autenticación se guarda en
+   `localStorage`.
+   La recuperación de contraseña sigue el mismo patrón: la solicitud nunca
+   confirma si un correo existe, el token se almacena solo como hash, expira y
+   se usa una sola vez. El cambio de contraseña y la invalidación del token se
+   ejecutan en una transacción; al completarse se revocan todas las sesiones
+   activas del cliente o usuario para obligar a iniciar sesión nuevamente.
+6. **Origen de la cotización**: `COTIZACION.usuario_id` nullable distingue
+   autogestión (cliente solo) de asistida (agente de canal) vía `origen`.
+   Para cotizaciones asistidas, `COTIZACION.canal_id` es obligatorio como
+   snapshot histórico y debe coincidir con el canal del usuario y producto.
+7. **`POLIZA` sólo existe si `COTIZACION.estado = ACEPTADA`** (relación 1:1
    opcional). Al crearse la póliza se dispara la generación de
    `TABLA_COBRANZA` (una fila por cuota, según `anios_vigencia * 12` o el
    plan de pagos que se defina).
-7. **Auditoría genérica**: la tabla `AUDITORIA` es agnóstica a la entidad
+8. **Auditoría genérica**: la tabla `AUDITORIA` es agnóstica a la entidad
    (patrón `entidad` + `entidad_id` + JSON antes/después) para no crear una
    tabla de historial por cada entidad. Se registra al menos en: `COTIZACION`
    (creación y cambios de estado), `POLIZA` (creación, cambios de estado),
    `TARIFA_BASE` y demás tablas `RIESGO_*` (ediciones), `PAGO` (registro y
    anulación).
-8. **Patrón "catálogo base + personalización por producto"**: igual que
+9. **Patrón "catálogo base + personalización por producto"**: igual que
    `CIUDAD` (catálogo global) se combina con `RIESGO_CIUDAD` (la aseguradora
    define el riesgo/tasa de esa ciudad para SU producto), lo mismo aplica a:
    - `COBERTURA_BASE` → `PRODUCTO_COBERTURA` (la aseguradora elige coberturas
@@ -666,7 +755,7 @@ sequenceDiagram
    de los valores vigentes en `PRODUCTO_COBERTURA` / `PRODUCTO_DEDUCIBLE` en
    ese momento, para que cambios posteriores en la configuración del producto
    no alteren cotizaciones ya emitidas.
-9. **Ramo dentro de un plan de suscripción**: `RAMO_BASE` es un catálogo
+10. **Ramo dentro de un plan de suscripción**: `RAMO_BASE` es un catálogo
    general de la plataforma (VEHICULO, VIDA, ASISTENCIA_MEDICA, HOGAR...).
    Cada `ASEGURADORA` contrata un `PLAN_SUSCRIPCION` (registrado en
    `ASEGURADORA_SUSCRIPCION`, con histórico de vigencia), y ese plan define
@@ -676,14 +765,14 @@ sequenceDiagram
    arma la aseguradora"). Cada `PRODUCTO` se crea sobre un `ASEGURADORA_RAMO`
    ya activado, nunca directamente sobre `RAMO_BASE`, para garantizar que
    nadie cree un producto de un ramo que la aseguradora no tiene contratado.
-10. **Tasa por año de vigencia configurable, no calculada**: solo el año 1 de
+11. **Tasa por año de vigencia configurable, no calculada**: solo el año 1 de
     la póliza usa la tasa que arroja el motor de riesgo (`tasa_promedio` de
     la cotización). Del año 2 en adelante, la tasa **la define la aseguradora
     por producto** en `TASA_ANUAL_PRODUCTO` — así se confirmó revisando el
     Excel original, donde esos valores estaban tipeados a mano y no salían de
     ninguna fórmula de riesgo. No se debe recalcular el riesgo para los años
     2-5; solo se consulta esta tabla.
-11. **Tipo de vehículo sí afecta la tasa (diseño completado respecto al
+12. **Tipo de vehículo sí afecta la tasa (diseño completado respecto al
     Excel)**: en el Excel original, la hoja `TARIFICACIÓN` definía tasas
     distintas según el tipo de vehículo (particulares / alta gama desde
     $40.000 / alquiler), pero esa tabla nunca se conectó a ninguna fórmula
@@ -693,11 +782,11 @@ sequenceDiagram
     captura al registrar el vehículo, y `TARIFA_BASE` sí se usa con las 4
     dimensiones de riesgo + tipo de vehículo + tiempo de crédito, tal como
     sugería la estructura original de `TARIFICACIÓN`.
-12. **Edad siempre calculada, nunca almacenada como número fijo**: aunque en
+13. **Edad siempre calculada, nunca almacenada como número fijo**: aunque en
     el Excel se tipeaba la edad manualmente, `CLIENTE` solo guarda
     `fecha_nacimiento`; la edad usada en `RIESGO_EDAD` se calcula en el
     momento de cada cotización, para que nunca quede desactualizada.
-13. **8 de los 9 factores de riesgo comparten una sola escala de tasas**:
+14. **8 de los 9 factores de riesgo comparten una sola escala de tasas**:
     auditando las fórmulas `P12:P19` del Excel se confirmó que `RIESGO_MODELO`,
     `RIESGO_CIUDAD`, `RIESGO_GENERO`, `RIESGO_USO`, `RIESGO_COLOR`,
     `RIESGO_ESTADO_CIVIL`, `RIESGO_EDAD` y `RIESGO_MONTO_ASEGURADO` **no**
@@ -801,6 +890,36 @@ cálculo sin tasa.
 | `USUARIO_CANAL` | Cotizar y gestionar clientes dentro de su canal/aseguradora asignada |
 | `CLIENTE` | Registrarse, cotizar (autogestión), ver sus propias cotizaciones/pólizas/cobranzas, aceptar/rechazar cotizaciones |
 
+### 6.1 Alcance del panel `ADMIN_PLATAFORMA`
+
+El panel de plataforma tiene navegación propia y separada de `CLIENTE`. Sus
+mantenimientos son: aseguradoras, suscripciones y asignación de planes,
+planes de suscripción, catálogos globales (`CIUDAD`, `RAMO_BASE`,
+`COBERTURA_BASE`, `CLAUSULA_BASE`, `DEDUCIBLE_BASE`) y creación de usuarios
+`ADMIN_ASEGURADORA`. También ofrece una vista global de los indicadores de la
+plataforma.
+
+`ADMIN_PLATAFORMA` no mantiene marcas, modelos, canales, productos ni tablas
+de riesgo/tarifa. Esas configuraciones pertenecen a `ADMIN_ASEGURADORA` y
+deben quedar aisladas por `producto_id`. El administrador de plataforma puede
+ver su existencia para supervisión, pero no editarlas desde sus mantenimientos
+operativos.
+
+### 6.2 Alcance del panel `ADMIN_ASEGURADORA`
+
+El panel de aseguradora tiene navegación propia y siempre opera dentro de la
+`aseguradora_id` asignada al usuario autenticado. Sus mantenimientos son:
+canales, productos y toda la configuración aislada por producto (tipos de
+vehículo, marcas/modelos y niveles de riesgo, factores de riesgo, tasas,
+tarifas, depreciación, pérdidas, coberturas, cláusulas y deducibles). También
+permite crear y administrar credenciales `USUARIO_CANAL` únicamente para
+canales de su misma aseguradora.
+
+Este perfil puede consultar las cotizaciones, pólizas y cobranzas generadas
+para su aseguradora, pero no puede acceder ni modificar datos de otros tenants,
+planes de suscripción o catálogos globales. Marcas y modelos no son un catálogo
+global: se administran en `RIESGO_MODELO` para cada `producto_id`.
+
 ---
 
 ## 7. Sugerencia de orden de construcción (referencial — tú decides el ritmo real con Claude Code)
@@ -808,7 +927,7 @@ cálculo sin tasa.
 No se pide construir todo de una vez. Como referencia, el orden natural sería:
 
 1. Esquema de base de datos completo en Supabase (todas las tablas de este documento) + seed de `CIUDAD` y `PERFIL`.
-2. Módulo de autenticación por tabla propia (login `USUARIO` y login `CLIENTE`, JWT, cascada de creación de credenciales).
+2. Módulo de autenticación por tabla propia (registro pendiente, activación por correo, Argon2id, sesiones opacas en cookie, login `USUARIO` y login `CLIENTE`, cascada de creación de credenciales).
 3. CRUD de configuración de producto para `ADMIN_ASEGURADORA` (canales, productos, coberturas, cláusulas, tablas de riesgo/tarifas).
 4. Motor de cotización (cálculo de tasa, riesgo, cuota mensual y tabla de amortización) — reutilizando el caso de prueba del Excel para validar.
 5. Flujo de aceptación de cotización → emisión de póliza → generación de tabla de cobranza.
@@ -828,3 +947,46 @@ de cálculo debe coincidir con:
 - `tasa_promedio ≈ 0.035556`
 - `nivel_riesgo → ALTO`
 - `cuota_fija_mensual ≈ 101.768`
+
+### 8.1 Parametrización operativa del producto de demostración
+
+La cotización de referencia combina los niveles de riesgo `1,1,1,2` para
+modelo, ciudad, género y uso. El Excel solo exponía algunas filas homogéneas
+de `TARIFA_BASE`, por lo que esas filas no cubren todas las combinaciones que
+puede producir un formulario real. Para el producto de demostración se debe
+sembrar una matriz completa de las cuatro dimensiones (3⁴ por cada tipo de
+vehículo y tramo de vigencia), tomando la banda de tarifa correspondiente al
+promedio redondeado de sus cuatro niveles. Esto es exclusivamente una
+parametrización inicial del producto demo; cada aseguradora podrá reemplazarla
+por su propia matriz comercial.
+
+La combinación del caso de referencia (`1,1,1,2`, vehículo liviano particular,
+vigencia de 4 años) debe resolver a tasa `0.035`, para conservar los resultados
+validados del Excel.
+
+### 8.2 Fórmulas mensuales verificadas contra el Excel
+
+Para cada año se toma el valor asegurado al inicio del año y se calcula una
+depreciación lineal en sus doce meses. El primer año usa
+`NUEVO_1ER_ANIO`/`USADO_1ER_ANIO`; los siguientes usan
+`NUEVO_DESDE_2DO`/`USADO_DESDE_2DO`.
+
+```
+depreciacion_anual = valor_inicio_anio * porcentaje_depreciacion
+depreciacion_mensual = depreciacion_anual / 12
+valor_asegurado_mes = valor_inicio_anio - depreciacion_mensual * indice_mes_del_anio
+prima_neta_mes = valor_asegurado_mes * tasa_anual / 12
+super_bancos = prima_neta_mes * super_bancos_pct
+seguro_campesino = prima_neta_mes * seguro_campesino_pct
+subtotal = prima_neta_mes + super_bancos + seguro_campesino + derechos_emision_valor
+iva = subtotal * iva_pct
+prima_total_mes = subtotal + iva
+cuota_fija = promedio(prima_total_mes de todos los meses de vigencia)
+diferencia = cuota_fija - prima_total_mes
+nivelacion_acumulada = suma acumulada de diferencia
+```
+
+El índice mensual dentro de cada año comienza en cero, de modo que el mes 1
+conserva el valor asegurado inicial y el mes 13 conserva el valor resultante al
+cierre del primer año. Los importes se guardan con la precisión definida en el
+esquema y solo se redondean a dos decimales para presentación.
