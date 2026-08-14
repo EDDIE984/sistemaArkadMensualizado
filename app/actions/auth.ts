@@ -1,6 +1,6 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { redirect, RedirectType } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { activationSchema, loginSchema, passwordRecoveryRequestSchema, passwordResetSchema, registrationSchema } from "@/lib/auth/schemas";
 import { generateOpaqueToken, hashOpaqueToken, hashPassword, verifyPassword } from "@/lib/auth/crypto";
@@ -198,7 +198,7 @@ export async function login(_: AuthActionState, formData: FormData): Promise<Aut
     console.error("Login failed", error instanceof Error ? error.message : "Unknown error");
     return { status: "error", message: "No pudimos iniciar sesión en este momento. Inténtalo nuevamente." };
   }
-  redirect(destination);
+  redirect(destination, RedirectType.replace);
 }
 
 export async function logout() {

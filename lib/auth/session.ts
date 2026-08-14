@@ -18,6 +18,14 @@ export type AppSession = {
   channelId: string | null;
 };
 
+export function sessionHome(session: AppSession) {
+  if (session.actorType === "CLIENTE") return "/mi-cuenta";
+  if (session.profileCode === "ADMIN_PLATAFORMA") return "/admin";
+  if (session.profileCode === "ADMIN_ASEGURADORA") return "/aseguradora";
+  if (session.profileCode === "USUARIO_CANAL") return "/canal";
+  return "/mi-cuenta";
+}
+
 export async function createSession({
   actorType,
   actorId,

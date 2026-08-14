@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { SiteNav } from "@/components/site-nav";
 import { AuthPanel } from "@/components/auth/auth-panel";
+import { getSession, sessionHome } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
   title: "Iniciar sesión | Confia",
@@ -9,6 +11,8 @@ export const metadata: Metadata = {
 };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
+  const session = await getSession();
+  if (session) redirect(sessionHome(session));
   const params = await searchParams;
   return (
     <main className="relative min-h-dvh overflow-x-hidden bg-[#0a0a0a] text-white">

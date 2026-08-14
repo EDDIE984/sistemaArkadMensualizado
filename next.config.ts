@@ -19,6 +19,10 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "no-store, max-age=0" }],
       },
       {
+        source: "/login",
+        headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
+      },
+      {
         source: "/mi-cuenta/:path*",
         headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
       },
