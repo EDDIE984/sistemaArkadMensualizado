@@ -64,7 +64,7 @@ export function SiteNav() {
 
         <button
           type="button"
-          className="inline-flex size-11 items-center justify-center rounded-full border border-white/30 bg-black/25 text-white backdrop-blur-md transition-colors hover:bg-black/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white min-[861px]:hidden"
+          className="inline-flex size-11 items-center justify-center rounded-full border border-cyan-100/25 bg-[#0a2037]/72 text-cyan-50 shadow-[0_8px_28px_rgba(1,13,28,0.28)] backdrop-blur-xl transition-colors hover:border-cyan-100/45 hover:bg-[#102e4b]/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-100 min-[861px]:hidden"
           aria-label={isOpen ? "Cerrar menú" : "Abrir menú"}
           aria-expanded={isOpen}
           aria-controls="mobile-navigation"
@@ -77,20 +77,23 @@ export function SiteNav() {
       {isOpen && (
         <div
           id="mobile-navigation"
-          className="absolute left-5 right-5 top-[calc(100%+0.5rem)] overflow-hidden rounded-2xl border border-white/20 bg-[#111]/95 p-2 shadow-[0_18px_55px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:left-auto sm:right-8 sm:w-72 min-[861px]:hidden"
+          className="absolute left-4 right-4 top-[calc(100%+0.5rem)] overflow-hidden rounded-[1.4rem] border border-cyan-100/20 bg-[linear-gradient(145deg,rgba(7,25,44,0.94),rgba(14,45,72,0.9))] p-2.5 shadow-[0_24px_70px_rgba(1,12,27,0.5)] ring-1 ring-white/5 backdrop-blur-2xl sm:left-auto sm:right-8 sm:w-72 min-[861px]:hidden"
         >
+          <div className="pointer-events-none absolute -right-12 -top-16 size-36 rounded-full bg-cyan-200/12 blur-3xl" aria-hidden="true" />
           {[...links, { href: "/contacto", label: "Contacto" }].map((link) => (
             <Link
               key={link.href}
               href={link.href}
               onClick={() => setIsOpen(false)}
               aria-current={pathname === link.href ? "page" : undefined}
-              className={`flex min-h-12 items-center justify-between rounded-xl px-4 text-[15px] font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white ${
-                pathname === link.href ? "bg-white text-[#111] hover:bg-white" : ""
+              className={`relative flex min-h-12 items-center justify-between rounded-2xl border px-4 text-[15px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-cyan-100 ${
+                pathname === link.href
+                  ? "border-cyan-100/30 bg-cyan-100/14 text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                  : "border-transparent text-white/82 hover:border-white/10 hover:bg-white/7 hover:text-white"
               }`}
             >
               {link.label}
-              {pathname === link.href && <span className="size-1.5 rounded-full bg-[#111]" aria-hidden="true" />}
+              {pathname === link.href && <span className="size-2 rounded-full bg-cyan-200 shadow-[0_0_12px_rgba(165,243,252,0.9)]" aria-hidden="true" />}
             </Link>
           ))}
         </div>
