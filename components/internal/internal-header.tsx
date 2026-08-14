@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { FileText, LogOut, Menu, Plus, ShieldCheck, UserRound } from "lucide-react";
+import { FileText, LogOut, Plus, ShieldCheck, UserRound } from "lucide-react";
 import { logout } from "@/app/actions/auth";
+import { MobileNavigationMenu } from "@/components/internal/mobile-navigation-menu";
 import type { AppSession } from "@/lib/auth/session";
 
 export function InternalHeader({ session }: { session: AppSession }) {
@@ -24,10 +25,8 @@ export function InternalHeader({ session }: { session: AppSession }) {
             </button>
           </form>
         </div>
-        <details className="shrink-0 md:hidden">
-          <summary className="flex size-11 cursor-pointer list-none items-center justify-center rounded-full border border-white/15 bg-white/5 text-white" aria-label="Abrir menú">
-            <Menu className="size-5" aria-hidden="true" />
-          </summary>
+        <div className="md:hidden">
+          <MobileNavigationMenu label="Abrir menú de cuenta">
           <div className="fixed inset-x-3 top-[4.5rem] max-h-[calc(100dvh-5.25rem)] overflow-y-auto rounded-2xl border border-cyan-100/15 bg-[#071426]/95 p-2 shadow-xl backdrop-blur-xl">
             <div className="flex items-center gap-2 border-b border-white/10 px-3 py-3 text-sm text-white/70"><UserRound className="size-4" /> <span className="truncate">{session.name}</span></div>
             <Link href="/mi-cuenta" className="mt-1 flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-white hover:bg-white/10">Resumen</Link>
@@ -38,7 +37,8 @@ export function InternalHeader({ session }: { session: AppSession }) {
               <button type="submit" className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-sm font-semibold text-white hover:bg-white/10"><LogOut className="size-4" /> Cerrar sesión</button>
             </form>
           </div>
-        </details>
+          </MobileNavigationMenu>
+        </div>
       </div>
     </header>
   );

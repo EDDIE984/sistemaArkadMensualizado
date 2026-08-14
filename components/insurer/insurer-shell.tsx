@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Boxes, Building2, ChartNoAxesCombined, ChevronLeft, ChevronRight, FileStack, LogOut, Menu, Network, ShieldCheck, Users } from "lucide-react";
+import { Boxes, Building2, ChartNoAxesCombined, ChevronLeft, ChevronRight, FileStack, LogOut, Network, ShieldCheck, Users } from "lucide-react";
 import { logout } from "@/app/actions/auth";
+import { MobileNavigationMenu } from "@/components/internal/mobile-navigation-menu";
 import type { AppSession } from "@/lib/auth/session";
 
 const items = [
@@ -17,7 +18,7 @@ const items = [
 export function InsurerShell({ session, insurerName, children }: { session: AppSession; insurerName: string; children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   return <div className="internal-background min-h-dvh overflow-x-clip text-white">
-    <header className="relative z-30 w-full max-w-full border-b border-white/10 bg-[#061323]/72 backdrop-blur-xl lg:hidden"><div className="flex min-h-16 min-w-0 items-center justify-between gap-3 px-4"><Link href="/aseguradora" className="flex min-h-11 min-w-0 items-center gap-2.5 font-bold"><ShieldCheck className="size-5 shrink-0 text-cyan-200" /> <span className="shrink-0">Arkad</span> <span className="max-w-28 truncate text-xs font-medium text-white/45">{insurerName}</span></Link><details className="shrink-0"><summary className="flex size-11 cursor-pointer list-none items-center justify-center rounded-full border border-white/15 bg-white/5" aria-label="Abrir menú de aseguradora"><Menu className="size-5" /></summary><nav className="fixed inset-x-3 top-[4.5rem] max-h-[calc(100dvh-5.25rem)] overflow-y-auto rounded-2xl border border-cyan-100/15 bg-[#071426]/98 p-2 shadow-2xl backdrop-blur-xl">{items.map(({ href,label,icon:Icon }) => <Link key={href} href={href} className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold hover:bg-white/10"><Icon className="size-4 text-cyan-100" />{label}</Link>)}<form action={logout} className="border-t border-white/10 pt-1"><button className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold hover:bg-white/10"><LogOut className="size-4" />Cerrar sesión</button></form></nav></details></div></header>
+    <header className="relative z-30 w-full max-w-full border-b border-white/10 bg-[#061323]/72 backdrop-blur-xl lg:hidden"><div className="flex min-h-16 min-w-0 items-center justify-between gap-3 px-4"><Link href="/aseguradora" className="flex min-h-11 min-w-0 items-center gap-2.5 font-bold"><ShieldCheck className="size-5 shrink-0 text-cyan-200" /> <span className="shrink-0">Arkad</span> <span className="max-w-28 truncate text-xs font-medium text-white/45">{insurerName}</span></Link><MobileNavigationMenu label="Abrir menú de aseguradora"><nav className="fixed inset-x-3 top-[4.5rem] max-h-[calc(100dvh-5.25rem)] overflow-y-auto rounded-2xl border border-cyan-100/15 bg-[#071426]/98 p-2 shadow-2xl backdrop-blur-xl">{items.map(({ href,label,icon:Icon }) => <Link key={href} href={href} className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold hover:bg-white/10"><Icon className="size-4 text-cyan-100" />{label}</Link>)}<form action={logout} className="border-t border-white/10 pt-1"><button className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold hover:bg-white/10"><LogOut className="size-4" />Cerrar sesión</button></form></nav></MobileNavigationMenu></div></header>
     <div className={`mx-auto grid min-h-dvh max-w-[1800px] transition-[grid-template-columns] duration-300 ${collapsed ? "lg:grid-cols-[84px_1fr]" : "lg:grid-cols-[260px_1fr]"}`}>
       <aside className="hidden min-h-full border-r border-white/10 bg-[#061323]/72 backdrop-blur-xl lg:block">
        <div className={`sticky top-0 flex h-dvh flex-col transition-[padding] duration-300 ${collapsed ? "p-3" : "p-5"}`}>
