@@ -2,7 +2,7 @@
 
 import { useActionState, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Building2, CalendarDays, CarFront, Check, Info, LoaderCircle, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building2, CalendarDays, CarFront, Check, Info, LoaderCircle, ShieldCheck, Sparkles } from "lucide-react";
 import { createQuoteAction } from "@/app/actions/quotes";
 import { createAssistedQuote } from "@/app/actions/channel";
 import { initialQuoteState, type QuoteFormData } from "@/lib/quotes/types";
@@ -12,6 +12,7 @@ const steps = ["Producto", "Vehículo", "Protección", "Confirmar"];
 export function QuoteWizard({ data, mode="self", clientId }: { data: QuoteFormData; mode?:"self"|"channel"; clientId?:string }) {
   const [state, action, pending] = useActionState(mode==="channel"?createAssistedQuote:createQuoteAction, initialQuoteState);
   const [step, setStep] = useState(0);
+  const [aiInspectionDone, setAiInspectionDone] = useState(false);
   const [productId, setProductId] = useState(data.products[0]?.id || "");
   const [vehicleMode, setVehicleMode] = useState<"new" | "existing">(data.vehicles.length ? "existing" : "new");
   const [existingVehicleId, setExistingVehicleId] = useState(data.vehicles[0]?.id || "");
@@ -130,12 +131,32 @@ export function QuoteWizard({ data, mode="self", clientId }: { data: QuoteFormDa
                 {mode==="channel"&&<><Summary label="Inicio de vigencia" value={formatDate(startDate)}/><Summary label="Fin de vigencia" value={formatDate(coverageEndDate)}/><Summary label="Días de cobertura" value={String(coverageDays)}/><Summary label="Cuotas completas" value={String(Number(duration)*12)}/></>}
               </dl>
               <p className="mt-5 text-xs leading-5 text-white/48">El valor final depende de tus datos personales, el vehículo y la configuración vigente del producto. Esta cotización no constituye todavía una póliza.</p>
+              <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-cyan-100/20 bg-cyan-100/8 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex gap-3">
+                  <Sparkles className="mt-0.5 size-5 shrink-0 text-cyan-100" aria-hidden="true" />
+                  <div>
+                    <p className="text-sm font-bold text-white">Inspección IA</p>
+                    <p className="mt-1 text-xs leading-5 text-white/60">Ejecuta la inspección asistida por IA del vehículo antes de guardar la cotización.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAiInspectionDone(true)}
+                  aria-pressed={aiInspectionDone}
+                  className={aiInspectionDone
+                    ? "inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-300/10 px-4 text-xs font-bold text-emerald-50"
+                    : "inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[#071426] hover:opacity-90"}
+                >
+                  {aiInspectionDone ? <><Check className="size-4" />Completado</> : <><Sparkles className="size-4" />Iniciar Inspección IA</>}
+                </button>
+              </div>
+              {!aiInspectionDone && <p className="mt-3 text-xs font-semibold text-amber-200">Completa la Inspección IA para poder guardar la cotización.</p>}
           </section>
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-4 sm:px-7">
           <button type="button" onClick={() => setStep((value) => Math.max(0, value - 1))} disabled={step === 0 || pending} className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white/65 hover:bg-white/8 disabled:invisible"><ArrowLeft className="size-4" /> Atrás</button>
-          {step < steps.length - 1 ? <button type="button" onClick={() => setStep((value) => Math.min(steps.length - 1, value + 1))} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[#071426] hover:opacity-90">Continuar <ArrowRight className="size-4" /></button> : <button type="submit" disabled={pending} className="inline-flex min-h-12 items-center gap-2 rounded-full bg-cyan-200 px-6 text-sm font-bold text-[#071426] hover:opacity-90 disabled:cursor-wait disabled:opacity-60">{pending ? <LoaderCircle className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}{pending ? "Calculando…" : "Calcular cotización"}</button>}
+          {step < steps.length - 1 ? <button type="button" onClick={() => setStep((value) => Math.min(steps.length - 1, value + 1))} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[#071426] hover:opacity-90">Continuar <ArrowRight className="size-4" /></button> : <button type="submit" disabled={pending || !aiInspectionDone} className="inline-flex min-h-12 items-center gap-2 rounded-full bg-cyan-200 px-6 text-sm font-bold text-[#071426] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">{pending ? <LoaderCircle className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}{pending ? "Calculando…" : "Calcular cotización"}</button>}
         </div>
       </div>
     </form>
