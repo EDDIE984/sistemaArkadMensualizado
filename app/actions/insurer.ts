@@ -1,11 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireInsurerAdmin } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashPassword } from "@/lib/auth/crypto";
+import { emitPolicy as runEmitPolicy, PolicyEmissionError } from "@/lib/policies/emit-policy";
+import { createSelfServiceQuote, QuoteConfigurationError } from "@/lib/quotes/create-quote";
 import type { InsurerActionState } from "@/lib/insurer/action-state";
+import type { QuoteActionState } from "@/lib/quotes/types";
 
 const optionalUuid = z.string().uuid().optional().or(z.literal(""));
 
@@ -30,7 +34,7 @@ export async function toggleChannel(formData: FormData) {
 
 export async function saveProduct(_: InsurerActionState, formData: FormData): Promise<InsurerActionState> {
   const session = await requireInsurerAdmin();
-  const parsed = z.object({ id: optionalUuid, name: z.string().trim().min(2).max(140), channelId: z.string().uuid(), branchId: z.string().uuid(), allCities: z.boolean() }).safeParse({ id: formData.get("id") || "", name: formData.get("name"), channelId: formData.get("channelId"), branchId: formData.get("branchId"), allCities: formData.get("allCities") === "on" });
+  const parsed = z.object({ id: optionalUuid, name: z.string().trim().min(2).max(140), channelId: z.string().uuid(), branchId: z.string().uuid(), allCities: z.boolean(), commission: z.coerce.number().min(0).max(1).optional().default(0) }).safeParse({ id: formData.get("id") || "", name: formData.get("name"), channelId: formData.get("channelId"), branchId: formData.get("branchId"), allCities: formData.get("allCities") === "on", commission: formData.get("commission") ?? undefined });
   if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
   const db = createAdminClient();
   const [{ data: channel }, { data: branch }] = await Promise.all([
@@ -38,7 +42,7 @@ export async function saveProduct(_: InsurerActionState, formData: FormData): Pr
     db.from("aseguradora_ramo").select("id").eq("id", parsed.data.branchId).eq("aseguradora_id", session.insurerId!).eq("activo", true).maybeSingle(),
   ]);
   if (!channel || !branch) return failure("El canal o ramo no pertenece a tu aseguradora o está inactivo.");
-  const values = { aseguradora_id: session.insurerId!, canal_id: channel.id, aseguradora_ramo_id: branch.id, nombre: parsed.data.name, aplica_todas_ciudades: parsed.data.allCities };
+  const values = { aseguradora_id: session.insurerId!, canal_id: channel.id, aseguradora_ramo_id: branch.id, nombre: parsed.data.name, aplica_todas_ciudades: parsed.data.allCities, comision_canal_pct: parsed.data.commission };
   const result = parsed.data.id
     ? await db.from("producto").update(values).eq("id", parsed.data.id).eq("aseguradora_id", session.insurerId!)
     : await db.from("producto").insert(values);
@@ -50,6 +54,93 @@ export async function toggleProduct(formData: FormData) {
   const session = await requireInsurerAdmin(); const id = z.string().uuid().parse(formData.get("id")); const active = formData.get("active") === "true";
   await createAdminClient().from("producto").update({ activo: active }).eq("id", id).eq("aseguradora_id", session.insurerId!);
   revalidatePath("/aseguradora/productos");
+}
+
+export async function emitPolicy(_: InsurerActionState, formData: FormData): Promise<InsurerActionState> {
+  const session = await requireInsurerAdmin();
+  const parsed = z.object({ quoteId: z.string().uuid(), policyNumber: z.string().trim().min(3).max(40) })
+    .safeParse({ quoteId: formData.get("quoteId"), policyNumber: formData.get("policyNumber") });
+  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
+  try {
+    await runEmitPolicy({ quoteId: parsed.data.quoteId, policyNumber: parsed.data.policyNumber, insurerId: session.insurerId!, userId: session.actorId });
+  } catch (error) {
+    if (error instanceof PolicyEmissionError) return failure(error.message);
+    console.error("Error al emitir póliza", error);
+    return failure("No pudimos emitir la póliza. No se guardó ningún dato.");
+  }
+  revalidatePath("/aseguradora/operacion");
+  revalidatePath("/aseguradora");
+  return success("Póliza emitida y cronograma de cobranza generado.");
+}
+
+const recalcSchema = z.object({
+  quoteId: z.string().uuid(),
+  productId: z.string().uuid("Selecciona un producto."),
+  vehicleTypeId: z.string().uuid("Selecciona el tipo de vehículo."),
+  brand: z.string().trim().min(1, "Indica la marca.").max(80),
+  model: z.string().trim().min(1, "Indica el modelo.").max(80),
+  year: z.coerce.number().int().min(1950).max(new Date().getFullYear() + 1),
+  color: z.string().trim().min(1, "Indica el color.").max(50),
+  insuredValue: z.coerce.number().positive().max(5_000_000),
+  vehicleStatus: z.enum(["NUEVO", "USADO"]),
+  use: z.enum(["COMERCIAL", "PARTICULAR", "CORPORATIVO"]),
+  plate: z.string().trim().max(15).optional(),
+  durationYears: z.coerce.number().int().min(1).max(5),
+  startDate: z.string().date().optional().or(z.literal("")),
+  coverageIds: z.array(z.string().uuid()).min(1, "Selecciona al menos una cobertura."),
+});
+
+export async function recalculateQuote(_: QuoteActionState, formData: FormData): Promise<QuoteActionState> {
+  const session = await requireInsurerAdmin();
+  const parsed = recalcSchema.safeParse({
+    quoteId: formData.get("quoteId"),
+    productId: formData.get("productId"),
+    vehicleTypeId: formData.get("vehicleTypeId"),
+    brand: formData.get("brand") || "",
+    model: formData.get("model") || "",
+    year: formData.get("year") || undefined,
+    color: formData.get("color") || "",
+    insuredValue: formData.get("insuredValue") || undefined,
+    vehicleStatus: formData.get("vehicleStatus") || undefined,
+    use: formData.get("use") || undefined,
+    plate: formData.get("plate") || "",
+    durationYears: formData.get("durationYears"),
+    startDate: formData.get("startDate") || "",
+    coverageIds: formData.getAll("coverageIds"),
+  });
+  if (!parsed.success) {
+    return { status: "error", message: "Revisa los datos indicados para recalcular.", fields: parsed.error.flatten().fieldErrors };
+  }
+
+  try {
+    await createSelfServiceQuote({
+      clientId: "",
+      productId: parsed.data.productId,
+      vehicleTypeId: parsed.data.vehicleTypeId,
+      brand: parsed.data.brand,
+      model: parsed.data.model,
+      year: parsed.data.year,
+      color: parsed.data.color,
+      insuredValue: parsed.data.insuredValue,
+      vehicleStatus: parsed.data.vehicleStatus,
+      use: parsed.data.use,
+      plate: parsed.data.plate,
+      durationYears: parsed.data.durationYears,
+      coverageIds: [...new Set(parsed.data.coverageIds)],
+      coverageStartDate: parsed.data.startDate || undefined,
+      editQuoteId: parsed.data.quoteId,
+      editInsurerId: session.insurerId!,
+      editUserId: session.actorId,
+    });
+  } catch (error) {
+    if (error instanceof QuoteConfigurationError) return { status: "error", message: error.message };
+    console.error("Error al recalcular cotización", error);
+    return { status: "error", message: "No pudimos recalcular la cotización. No se guardó ningún cambio." };
+  }
+
+  revalidatePath("/aseguradora/operacion");
+  revalidatePath("/aseguradora");
+  redirect(`/aseguradora/operacion/${parsed.data.quoteId}/calculo?recalculado=1`);
 }
 
 export async function saveChannelUser(_: InsurerActionState, formData: FormData): Promise<InsurerActionState> {

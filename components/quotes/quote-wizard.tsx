@@ -5,22 +5,47 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, Building2, CalendarDays, CarFront, Check, Info, LoaderCircle, ShieldCheck, Sparkles } from "lucide-react";
 import { createQuoteAction } from "@/app/actions/quotes";
 import { createAssistedQuote } from "@/app/actions/channel";
+import { recalculateQuote } from "@/app/actions/insurer";
 import { initialQuoteState, type QuoteFormData } from "@/lib/quotes/types";
 
 const steps = ["Producto", "Vehículo", "Protección", "Confirmar"];
 
-export function QuoteWizard({ data, mode="self", clientId }: { data: QuoteFormData; mode?:"self"|"channel"; clientId?:string }) {
-  const [state, action, pending] = useActionState(mode==="channel"?createAssistedQuote:createQuoteAction, initialQuoteState);
+export type QuoteEditInitial = {
+  origen: "AUTOGESTION" | "CANAL";
+  productId: string;
+  vehicle: {
+    typeId: string;
+    brand: string;
+    model: string;
+    year: number;
+    color: string;
+    insuredValue: number;
+    status: "NUEVO" | "USADO";
+    use: "COMERCIAL" | "PARTICULAR" | "CORPORATIVO";
+    plate: string | null;
+  };
+  coverageIds: string[];
+  durationYears: string;
+  startDate: string;
+};
+
+export function QuoteWizard({ data, mode = "self", clientId, quoteId, initial }: { data: QuoteFormData; mode?: "self" | "channel" | "edit"; clientId?: string; quoteId?: string; initial?: QuoteEditInitial }) {
+  const isEdit = mode === "edit";
+  const action0 = isEdit ? recalculateQuote : mode === "channel" ? createAssistedQuote : createQuoteAction;
+  const [state, action, pending] = useActionState(action0, initialQuoteState);
   const [step, setStep] = useState(0);
-  const [aiInspectionDone, setAiInspectionDone] = useState(false);
-  const [productId, setProductId] = useState(data.products[0]?.id || "");
-  const [vehicleMode, setVehicleMode] = useState<"new" | "existing">(data.vehicles.length ? "existing" : "new");
+  const [aiInspectionDone, setAiInspectionDone] = useState(isEdit);
+  const [productId, setProductId] = useState(initial?.productId || data.products[0]?.id || "");
+  const [vehicleMode, setVehicleMode] = useState<"new" | "existing">(isEdit || !data.vehicles.length ? "new" : "existing");
   const [existingVehicleId, setExistingVehicleId] = useState(data.vehicles[0]?.id || "");
-  const [vehicleTypeId, setVehicleTypeId] = useState(data.products[0]?.vehicleTypes[0]?.id || "");
-  const [brand, setBrand] = useState(data.products[0]?.models[0]?.brand || "");
-  const [model, setModel] = useState(data.products[0]?.models[0]?.model || "");
-  const [duration, setDuration] = useState("4");
-  const [startDate, setStartDate] = useState(todayInEcuador());
+  const initialProduct = data.products.find((item) => item.id === initial?.productId);
+  const [vehicleTypeId, setVehicleTypeId] = useState(initial?.vehicle.typeId || (initialProduct || data.products[0])?.vehicleTypes[0]?.id || "");
+  const [brand, setBrand] = useState(initial?.vehicle.brand || (initialProduct || data.products[0])?.models[0]?.brand || "");
+  const [model, setModel] = useState(initial?.vehicle.model || (initialProduct || data.products[0])?.models[0]?.model || "");
+  const [duration, setDuration] = useState(initial?.durationYears || "4");
+  const [startDate, setStartDate] = useState(initial?.startDate || todayInEcuador());
+  const vigenciaEditable = mode === "channel" || (isEdit && initial?.origen === "CANAL");
+  const showVigenciaField = mode !== "self";
 
   const product = data.products.find((item) => item.id === productId) || data.products[0];
   const brands = useMemo(() => [...new Set((product?.models || []).map((item) => item.brand))].sort(), [product]);
@@ -44,7 +69,8 @@ export function QuoteWizard({ data, mode="self", clientId }: { data: QuoteFormDa
   return (
     <form action={action} className="mt-7">
       <input type="hidden" name="vehicleMode" value={vehicleMode} />
-      {mode==="channel"&&<input type="hidden" name="clientId" value={clientId}/>} 
+      {mode==="channel"&&<input type="hidden" name="clientId" value={clientId}/>}
+      {isEdit&&<input type="hidden" name="quoteId" value={quoteId}/>}
       <div className="glass-panel overflow-hidden">
         <div className="border-b border-white/10 px-4 py-5 sm:px-7">
           <ol className="grid grid-cols-4 gap-2" aria-label="Progreso de la cotización">
@@ -76,7 +102,7 @@ export function QuoteWizard({ data, mode="self", clientId }: { data: QuoteFormDa
 
           <section aria-labelledby="vehicle-step" className={step === 1 ? "" : "hidden"}>
               <StepHeading icon={<CarFront />} id="vehicle-step" eyebrow="Datos del riesgo" title="Cuéntanos sobre el vehículo" description="Estos datos determinan la tasa; revísalos antes de continuar." />
-              {data.vehicles.length > 0 && (
+              {!isEdit && data.vehicles.length > 0 && (
                 <div className="mt-6 inline-flex rounded-full border border-white/12 bg-[#061323]/45 p-1">
                   <button type="button" onClick={() => setVehicleMode("existing")} className={`min-h-10 rounded-full px-4 text-sm font-semibold ${vehicleMode === "existing" ? "bg-white text-[#071426]" : "text-white/65"}`}>Ya registrado</button>
                   <button type="button" onClick={() => setVehicleMode("new")} className={`min-h-10 rounded-full px-4 text-sm font-semibold ${vehicleMode === "new" ? "bg-white text-[#071426]" : "text-white/65"}`}>Vehículo nuevo</button>
@@ -100,12 +126,12 @@ export function QuoteWizard({ data, mode="self", clientId }: { data: QuoteFormDa
                   <Field label="Tipo de vehículo" error={state.fields?.vehicleTypeId?.[0]}><select name="vehicleTypeId" value={vehicleTypeId} onChange={(e) => setVehicleTypeId(e.target.value)} className={inputClass}><option value="">Selecciona</option>{product.vehicleTypes.map((item) => <option key={item.id} value={item.id}>{friendlyVehicleType(item.description)}</option>)}</select></Field>
                   <Field label="Marca" error={state.fields?.brand?.[0]}><select name="brand" value={brand} onChange={(e) => { const next = e.target.value; setBrand(next); setModel(product.models.find((item) => item.brand === next)?.model || ""); }} className={inputClass}><option value="">Selecciona</option>{brands.map((item) => <option key={item}>{item}</option>)}</select></Field>
                   <Field label="Modelo" error={state.fields?.model?.[0]}><select name="model" value={model} onChange={(e) => setModel(e.target.value)} className={inputClass}><option value="">Selecciona</option>{models.map((item) => <option key={`${item.brand}-${item.model}`} value={item.model}>{item.model}</option>)}</select></Field>
-                  <Field label="Año" error={state.fields?.year?.[0]}><input name="year" type="number" min="1950" max={new Date().getFullYear() + 1} defaultValue={new Date().getFullYear()} className={inputClass} /></Field>
-                  <Field label="Color" error={state.fields?.color?.[0]}><select name="color" defaultValue="PLATA" className={inputClass}><option value="">Selecciona</option>{product.colors.map((item) => <option key={item}>{title(item)}</option>)}</select></Field>
-                  <Field label="Valor asegurado" error={state.fields?.insuredValue?.[0]}><input name="insuredValue" type="number" min="1" step="0.01" defaultValue="40000" inputMode="decimal" className={inputClass} /></Field>
-                  <Field label="Estado" error={state.fields?.vehicleStatus?.[0]}><select name="vehicleStatus" defaultValue="USADO" className={inputClass}><option value="NUEVO">Nuevo</option><option value="USADO">Usado</option></select></Field>
-                  <Field label="Uso" error={state.fields?.use?.[0]}><select name="use" defaultValue="PARTICULAR" className={inputClass}><option value="PARTICULAR">Particular</option><option value="COMERCIAL">Comercial</option><option value="CORPORATIVO">Corporativo</option></select></Field>
-                  <Field label="Placa (opcional)"><input name="plate" maxLength={15} autoCapitalize="characters" placeholder="ABC-1234" className={inputClass} /></Field>
+                  <Field label="Año" error={state.fields?.year?.[0]}><input name="year" type="number" min="1950" max={new Date().getFullYear() + 1} defaultValue={initial?.vehicle.year ?? new Date().getFullYear()} className={inputClass} /></Field>
+                  <Field label="Color" error={state.fields?.color?.[0]}><select name="color" defaultValue={initial?.vehicle.color ? title(initial.vehicle.color) : "PLATA"} className={inputClass}><option value="">Selecciona</option>{product.colors.map((item) => <option key={item}>{title(item)}</option>)}</select></Field>
+                  <Field label="Valor asegurado" error={state.fields?.insuredValue?.[0]}><input name="insuredValue" type="number" min="1" step="0.01" defaultValue={initial?.vehicle.insuredValue ?? "40000"} inputMode="decimal" className={inputClass} /></Field>
+                  <Field label="Estado" error={state.fields?.vehicleStatus?.[0]}><select name="vehicleStatus" defaultValue={initial?.vehicle.status ?? "USADO"} className={inputClass}><option value="NUEVO">Nuevo</option><option value="USADO">Usado</option></select></Field>
+                  <Field label="Uso" error={state.fields?.use?.[0]}><select name="use" defaultValue={initial?.vehicle.use ?? "PARTICULAR"} className={inputClass}><option value="PARTICULAR">Particular</option><option value="COMERCIAL">Comercial</option><option value="CORPORATIVO">Corporativo</option></select></Field>
+                  <Field label="Placa (opcional)"><input name="plate" maxLength={15} autoCapitalize="characters" placeholder="ABC-1234" defaultValue={initial?.vehicle.plate ?? ""} className={inputClass} /></Field>
                 </div>
               )}
           </section>
@@ -113,11 +139,11 @@ export function QuoteWizard({ data, mode="self", clientId }: { data: QuoteFormDa
           <section aria-labelledby="coverage-step" className={step === 2 ? "" : "hidden"}>
               <StepHeading icon={<ShieldCheck />} id="coverage-step" eyebrow="Protección" title="Define tu cobertura" description="Selecciona la vigencia y las protecciones que quieres incluir en el cálculo." />
               <div className="mt-7 grid gap-6">
-                <div className={mode === "channel" ? "grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(260px,0.8fr)]" : "max-w-sm"}>
+                <div className={mode !== "self" ? "grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(260px,0.8fr)]" : "max-w-sm"}>
                   <Field label="Años de vigencia" error={state.fields?.durationYears?.[0]}><select name="durationYears" value={duration} onChange={(event) => setDuration(event.target.value)} className={inputClass}>{[1,2,3,4,5].map((year) => <option key={year} value={year}>{year} {year === 1 ? "año" : "años"}</option>)}</select></Field>
-                  {mode==="channel"&&<><Field label="Fecha de inicio de vigencia" error={state.fields?.startDate?.[0]}><input name="startDate" type="date" required min={todayInEcuador()} max={maxStartDate()} value={startDate} onChange={event=>setStartDate(event.target.value)} className={inputClass}/><span className="mt-1.5 block text-xs leading-5 text-white/45">Puedes seleccionar desde hoy hasta 90 días en el futuro.</span></Field><div className="rounded-2xl border border-cyan-100/15 bg-cyan-100/7 p-4 md:col-span-2 xl:col-span-1"><p className="flex items-center gap-2 text-xs font-bold text-cyan-50"><CalendarDays className="size-4"/>Vigencia calculada</p><dl className="mt-3 grid gap-2 text-xs"><DateSummary label="Finaliza" value={formatDate(coverageEndDate)}/><DateSummary label="Total de días" value={String(coverageDays)}/><DateSummary label="Cuotas" value={String(Number(duration)*12)}/></dl></div></>}
+                  {showVigenciaField && <><Field label="Fecha de inicio de vigencia" error={state.fields?.startDate?.[0]}><input name="startDate" type="date" required={vigenciaEditable} disabled={!vigenciaEditable} min={isEdit ? undefined : todayInEcuador()} max={isEdit ? undefined : maxStartDate()} value={startDate} onChange={event=>setStartDate(event.target.value)} className={`${inputClass} disabled:opacity-50`}/><span className="mt-1.5 block text-xs leading-5 text-white/45">{vigenciaEditable ? (isEdit ? "Ajusta la fecha; el fin de vigencia se recalcula." : "Puedes seleccionar desde hoy hasta 90 días en el futuro.") : "La vigencia de una cotización de autogestión se define al emitir la póliza."}</span></Field>{vigenciaEditable && <div className="rounded-2xl border border-cyan-100/15 bg-cyan-100/7 p-4 md:col-span-2 xl:col-span-1"><p className="flex items-center gap-2 text-xs font-bold text-cyan-50"><CalendarDays className="size-4"/>Vigencia calculada</p><dl className="mt-3 grid gap-2 text-xs"><DateSummary label="Finaliza" value={formatDate(coverageEndDate)}/><DateSummary label="Total de días" value={String(coverageDays)}/><DateSummary label="Cuotas" value={String(Number(duration)*12)}/></dl></div>}</>}
                 </div>
-                <fieldset><legend className="mb-2 text-sm font-semibold">Coberturas</legend><div className="grid gap-3">{product.coverages.map((coverage) => <label key={coverage.id} className="flex cursor-pointer gap-3 rounded-2xl border border-white/12 bg-[#061323]/35 p-4 hover:border-white/30"><input type="checkbox" name="coverageIds" value={coverage.id} defaultChecked className="mt-1 size-4 accent-cyan-200" /><span><strong className="text-sm">{coverage.name}</strong>{coverage.description && <span className="mt-1 block text-xs leading-5 text-white/55">{coverage.description}</span>}</span></label>)}</div>{state.fields?.coverageIds?.[0] && <p className="mt-2 text-xs text-red-200">{state.fields.coverageIds[0]}</p>}</fieldset>
+                <fieldset><legend className="mb-2 text-sm font-semibold">Coberturas</legend><div className="grid gap-3">{product.coverages.map((coverage) => <label key={coverage.id} className="flex cursor-pointer gap-3 rounded-2xl border border-white/12 bg-[#061323]/35 p-4 hover:border-white/30"><input type="checkbox" name="coverageIds" value={coverage.id} defaultChecked={initial ? initial.coverageIds.includes(coverage.id) : true} className="mt-1 size-4 accent-cyan-200" /><span><strong className="text-sm">{coverage.name}</strong>{coverage.description && <span className="mt-1 block text-xs leading-5 text-white/55">{coverage.description}</span>}</span></label>)}</div>{state.fields?.coverageIds?.[0] && <p className="mt-2 text-xs text-red-200">{state.fields.coverageIds[0]}</p>}</fieldset>
               </div>
           </section>
 
@@ -127,10 +153,11 @@ export function QuoteWizard({ data, mode="self", clientId }: { data: QuoteFormDa
                 <Summary label="Producto" value={`${product.name} · ${product.insurerName}`} />
                 <Summary label="Vehículo" value={vehicleMode === "existing" && vehicle ? `${vehicle.brand} ${vehicle.model}` : `${brand} ${model}`} />
                 <Summary label="Vigencia" value={`${duration} ${duration === "1" ? "año" : "años"}`} />
-                <Summary label="Modalidad" value={mode==="channel"?"Cotización asistida por canal":"Cotización individual en autogestión"} />
-                {mode==="channel"&&<><Summary label="Inicio de vigencia" value={formatDate(startDate)}/><Summary label="Fin de vigencia" value={formatDate(coverageEndDate)}/><Summary label="Días de cobertura" value={String(coverageDays)}/><Summary label="Cuotas completas" value={String(Number(duration)*12)}/></>}
+                <Summary label="Modalidad" value={isEdit?"Recálculo por la aseguradora":mode==="channel"?"Cotización asistida por canal":"Cotización individual en autogestión"} />
+                {vigenciaEditable&&<><Summary label="Inicio de vigencia" value={formatDate(startDate)}/><Summary label="Fin de vigencia" value={formatDate(coverageEndDate)}/><Summary label="Días de cobertura" value={String(coverageDays)}/><Summary label="Cuotas completas" value={String(Number(duration)*12)}/></>}
               </dl>
-              <p className="mt-5 text-xs leading-5 text-white/48">El valor final depende de tus datos personales, el vehículo y la configuración vigente del producto. Esta cotización no constituye todavía una póliza.</p>
+              <p className="mt-5 text-xs leading-5 text-white/48">{isEdit ? "El recálculo re-corre el motor con la parametrización vigente del producto (tasas, depreciación y comisión del canal) y reemplaza el cronograma. La cotización sigue pendiente." : "El valor final depende de tus datos personales, el vehículo y la configuración vigente del producto. Esta cotización no constituye todavía una póliza."}</p>
+              {!isEdit && <>
               <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-cyan-100/20 bg-cyan-100/8 p-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex gap-3">
                   <Sparkles className="mt-0.5 size-5 shrink-0 text-cyan-100" aria-hidden="true" />
@@ -151,12 +178,13 @@ export function QuoteWizard({ data, mode="self", clientId }: { data: QuoteFormDa
                 </button>
               </div>
               {!aiInspectionDone && <p className="mt-3 text-xs font-semibold text-amber-200">Completa la Inspección IA para poder guardar la cotización.</p>}
+              </>}
           </section>
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-4 sm:px-7">
           <button type="button" onClick={() => setStep((value) => Math.max(0, value - 1))} disabled={step === 0 || pending} className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white/65 hover:bg-white/8 disabled:invisible"><ArrowLeft className="size-4" /> Atrás</button>
-          {step < steps.length - 1 ? <button type="button" onClick={() => setStep((value) => Math.min(steps.length - 1, value + 1))} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[#071426] hover:opacity-90">Continuar <ArrowRight className="size-4" /></button> : <button type="submit" disabled={pending || !aiInspectionDone} className="inline-flex min-h-12 items-center gap-2 rounded-full bg-cyan-200 px-6 text-sm font-bold text-[#071426] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">{pending ? <LoaderCircle className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}{pending ? "Calculando…" : "Calcular cotización"}</button>}
+          {step < steps.length - 1 ? <button type="button" onClick={() => setStep((value) => Math.min(steps.length - 1, value + 1))} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[#071426] hover:opacity-90">Continuar <ArrowRight className="size-4" /></button> : <button type="submit" disabled={pending || (!isEdit && !aiInspectionDone)} className="inline-flex min-h-12 items-center gap-2 rounded-full bg-cyan-200 px-6 text-sm font-bold text-[#071426] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">{pending ? <LoaderCircle className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}{pending ? (isEdit ? "Recalculando…" : "Calculando…") : (isEdit ? "Recalcular cotización" : "Calcular cotización")}</button>}
         </div>
       </div>
     </form>

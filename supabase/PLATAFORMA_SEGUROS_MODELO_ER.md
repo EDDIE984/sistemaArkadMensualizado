@@ -153,6 +153,7 @@ erDiagram
         uuid canal_id FK
         uuid aseguradora_ramo_id FK
         string nombre
+        decimal comision_canal_pct "corte interno del canal sobre prima neta mensual (0..1); no afecta al cliente"
         boolean aplica_todas_ciudades
         boolean activo
         timestamp creado_en
@@ -478,6 +479,7 @@ erDiagram
         decimal tasa_promedio
         int nivel_riesgo
         decimal cuota_fija_mensual
+        decimal comision_canal_pct "snapshot de PRODUCTO.comision_canal_pct al cotizar (0..1); interno"
         string estado "PENDIENTE|ACEPTADA|RECHAZADA|EXPIRADA"
         timestamp creado_en
         timestamp fecha_aceptacion
@@ -504,6 +506,7 @@ erDiagram
         int mes
         decimal valor_asegurado_mes
         decimal prima_neta_mes
+        decimal comision_canal "prima_neta_mes * COTIZACION.comision_canal_pct; interno, no entra en subtotal/iva/cuota"
         decimal super_bancos
         decimal seguro_campesino
         decimal derechos_emision
@@ -795,6 +798,21 @@ sequenceDiagram
     `TASA_POR_NIVEL_RIESGO` (por producto). Solo `TARIFA_BASE` (el 9º factor,
     que combina tiempo de crédito + tipo de vehículo) tiene una tasa
     verdaderamente propia e independiente de esa escala.
+15. **Comisión del canal = corte interno sobre la prima neta**: cada `PRODUCTO`
+    define `comision_canal_pct` (decimal 0..1) con la fracción de la
+    `prima_neta_mes` que le corresponde al `CANAL` dueño del producto
+    (`producto.canal_id`, siempre exactamente uno). Al cotizar, ese porcentaje
+    se **congela** en `COTIZACION.comision_canal_pct` (snapshot histórico, igual
+    que coberturas/deducibles) y se desglosa mes a mes en
+    `AMORTIZACION_MENSUAL.comision_canal = prima_neta_mes *
+    COTIZACION.comision_canal_pct`. Es **exclusivamente interno**: no modifica
+    `cuota_fija_mensual`, `prima_total_mes`, `subtotal`, `iva`, impuestos ni
+    ningún número que vea el cliente; solo sirve para liquidar al canal y para
+    los indicadores del panel de la aseguradora. Un producto sin comisión
+    configurada usa 0. Un producto del canal `INDIVIDUAL` (autogestión) con
+    `comision_canal_pct > 0` también la registra, aunque su cotización no tenga
+    `canal_id`; por eso debe mantenerse en 0 salvo que se quiera reservar un
+    corte interno sin canal externo.
 
 ---
 
@@ -858,6 +876,12 @@ El **modelo de amortización mensual** (valor asegurado que se deprecia mes a
 mes, prima neta, impuestos, cuota fija por promedio y nivelación acumulada)
 se mantiene exactamente igual a la sección 4.3 de `UNINOVA_NOW_spec_modelo_datos.md`,
 usando `PARAMETRO_MODELO_MENSUAL` (por producto) en vez de constantes fijas.
+
+Además, por cada mes se calcula `comision_canal = prima_neta_mes *
+COTIZACION.comision_canal_pct` (ver regla 15 de la sección 4). Es un valor
+interno de la aseguradora/canal y **no** interviene en `subtotal`, `iva`,
+`prima_total_mes` ni `cuota_fija`; solo se guarda en `AMORTIZACION_MENSUAL`
+para liquidación al canal y para los indicadores del panel.
 
 **Tasa aplicable por año de vigencia** (evidencia tomada directamente del
 Excel, hoja `MODELO MENSUALIZADO`, celdas `H6:H10`):
@@ -976,6 +1000,7 @@ depreciacion_anual = valor_inicio_anio * porcentaje_depreciacion
 depreciacion_mensual = depreciacion_anual / 12
 valor_asegurado_mes = valor_inicio_anio - depreciacion_mensual * indice_mes_del_anio
 prima_neta_mes = valor_asegurado_mes * tasa_anual / 12
+comision_canal = prima_neta_mes * comision_canal_pct   -- interno; NO entra en subtotal/iva/cuota_fija
 super_bancos = prima_neta_mes * super_bancos_pct
 seguro_campesino = prima_neta_mes * seguro_campesino_pct
 subtotal = prima_neta_mes + super_bancos + seguro_campesino + derechos_emision_valor

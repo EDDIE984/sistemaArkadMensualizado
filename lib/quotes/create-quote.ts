@@ -20,6 +20,12 @@ export type CreateQuoteInput = {
   coverageIds: string[];
   assistedBy?: { userId: string; insurerId: string; channelId: string };
   coverageStartDate?: string;
+  /** Cuando viene, se recalcula esa cotización EN SITIO (sólo si está PENDIENTE y sin póliza). */
+  editQuoteId?: string;
+  /** Requerido con editQuoteId: la aseguradora dueña que autoriza el recálculo. */
+  editInsurerId?: string;
+  /** Opcional con editQuoteId: usuario (aseguradora) que ejecuta el recálculo, para auditoría. */
+  editUserId?: string;
 };
 
 type ClientProfile = {
@@ -40,6 +46,17 @@ type Vehicle = {
   uso: "COMERCIAL" | "PARTICULAR" | "CORPORATIVO";
 };
 
+type ExistingQuote = {
+  id: string;
+  aseguradora_id: string;
+  cliente_id: string;
+  vehiculo_id: string;
+  canal_id: string | null;
+  usuario_id: string | null;
+  origen: "AUTOGESTION" | "CANAL";
+  estado: string;
+};
+
 export class QuoteConfigurationError extends Error {}
 
 async function one<T>(client: PoolClient, sql: string, values: unknown[], label: string): Promise<T> {
@@ -49,10 +66,36 @@ async function one<T>(client: PoolClient, sql: string, values: unknown[], label:
 }
 
 export async function createSelfServiceQuote(input: CreateQuoteInput) {
-  if (input.assistedBy && !input.coverageStartDate) throw new QuoteConfigurationError("Define la fecha de inicio de vigencia.");
   const connection = await getDbPool().connect();
   try {
     await connection.query("begin");
+
+    // ── Modo recálculo: cargar y bloquear la cotización existente ──────────────
+    let existingQuote: ExistingQuote | null = null;
+    if (input.editQuoteId) {
+      if (!input.editInsurerId) throw new QuoteConfigurationError("Falta la aseguradora que autoriza el recálculo.");
+      existingQuote = await one<ExistingQuote>(connection, `
+        select id, aseguradora_id, cliente_id, vehiculo_id, canal_id, usuario_id, origen, estado
+        from cotizacion
+        where id=$1 and aseguradora_id=$2
+        for update
+      `, [input.editQuoteId, input.editInsurerId], "la cotización a recalcular");
+      if (existingQuote.estado !== "PENDIENTE") {
+        throw new QuoteConfigurationError(`La cotización está en estado ${existingQuote.estado}; sólo se recalculan cotizaciones pendientes.`);
+      }
+      const hasPolicy = await connection.query("select 1 from poliza where cotizacion_id=$1", [input.editQuoteId]);
+      if (hasPolicy.rowCount) throw new QuoteConfigurationError("La cotización ya tiene una póliza emitida; no puede recalcularse.");
+    }
+
+    const isCanal = existingQuote ? existingQuote.origen === "CANAL" : Boolean(input.assistedBy);
+    if ((input.assistedBy || (existingQuote && isCanal)) && !input.coverageStartDate) {
+      throw new QuoteConfigurationError("Define la fecha de inicio de vigencia.");
+    }
+
+    const effectiveClientId = existingQuote ? existingQuote.cliente_id : input.clientId;
+    const scopeInsurerId = existingQuote ? existingQuote.aseguradora_id : input.assistedBy?.insurerId ?? null;
+    const scopeChannelId = existingQuote ? existingQuote.canal_id : input.assistedBy?.channelId ?? null;
+    const allowedRegistro = existingQuote || input.assistedBy ? ["ACTIVO", "SIN_ACCESO"] : ["ACTIVO"];
 
     const profile = await one<ClientProfile>(connection, `
       select ciudad_id, fecha_nacimiento, genero, estado_civil
@@ -62,10 +105,10 @@ export async function createSelfServiceQuote(input: CreateQuoteInput) {
         and ciudad_id is not null and fecha_nacimiento is not null
         and genero is not null and estado_civil is not null
       for update
-    `, [input.clientId, input.assistedBy ? ["ACTIVO","SIN_ACCESO"] : ["ACTIVO"]], "el perfil completo del cliente");
+    `, [effectiveClientId, allowedRegistro], "el perfil completo del cliente");
 
-    const product = await one<{ aseguradora_id: string; canal_id: string }>(connection, `
-      select p.aseguradora_id,p.canal_id
+    const product = await one<{ aseguradora_id: string; canal_id: string; comision_canal_pct: string | null }>(connection, `
+      select p.aseguradora_id,p.canal_id,p.comision_canal_pct
       from producto p
       join aseguradora a on a.id=p.aseguradora_id and a.activo=true
       join canal c on c.id=p.canal_id and c.activo=true
@@ -78,19 +121,33 @@ export async function createSelfServiceQuote(input: CreateQuoteInput) {
         and (p.aplica_todas_ciudades=true or exists (
           select 1 from producto_ciudad pc where pc.producto_id=p.id and pc.ciudad_id=$2
         ))
-    `, [input.productId, profile.ciudad_id, input.assistedBy?.insurerId || null, input.assistedBy?.channelId || null], "un producto disponible para el canal y la ciudad del cliente");
+    `, [input.productId, profile.ciudad_id, scopeInsurerId, scopeChannelId], "un producto disponible para el canal y la ciudad del cliente");
 
-    if (input.assistedBy) {
-      await one(connection, `select 1 from canal_cliente where canal_id=$1 and cliente_id=$2`, [input.assistedBy.channelId,input.clientId], "la vinculación del cliente con el canal");
+    // Comisión interna del canal sobre la prima neta mensual. No altera ningún valor del cliente.
+    const commissionPct = Math.min(1, Math.max(0, Number(product.comision_canal_pct ?? 0) || 0));
+
+    if (scopeChannelId) {
+      await one(connection, `select 1 from canal_cliente where canal_id=$1 and cliente_id=$2`, [scopeChannelId, effectiveClientId], "la vinculación del cliente con el canal");
     }
 
     let vehicle: Vehicle;
-    if (input.existingVehicleId) {
+    if (existingQuote) {
+      await one(connection, `select 1 from tipo_vehiculo where id=$1 and producto_id=$2`, [input.vehicleTypeId, input.productId], "el tipo de vehículo del producto");
+      const updated = await connection.query<Vehicle>(`
+        update vehiculo set
+          tipo_vehiculo_id=$2,marca=$3,modelo=$4,anio=$5,color=$6,valor_asegurado=$7,estado_vh=$8,uso=$9,placa=nullif($10,'')
+        where id=$1 and cliente_id=$11
+        returning id,tipo_vehiculo_id,marca,modelo,color,valor_asegurado,estado_vh,uso
+      `, [existingQuote.vehiculo_id, input.vehicleTypeId, input.brand, input.model, input.year, input.color,
+        input.insuredValue, input.vehicleStatus, input.use, input.plate || "", effectiveClientId]);
+      if (updated.rowCount !== 1) throw new QuoteConfigurationError("No pudimos actualizar el vehículo de la cotización.");
+      vehicle = updated.rows[0];
+    } else if (input.existingVehicleId) {
       vehicle = await one<Vehicle>(connection, `
         select v.id,v.tipo_vehiculo_id,v.marca,v.modelo,v.color,v.valor_asegurado,v.estado_vh,v.uso
         from vehiculo v join tipo_vehiculo tv on tv.id=v.tipo_vehiculo_id and tv.producto_id=$3
         where v.id=$1 and v.cliente_id=$2 and v.color is not null
-      `, [input.existingVehicleId, input.clientId, input.productId], "el vehículo seleccionado para este producto");
+      `, [input.existingVehicleId, effectiveClientId, input.productId], "el vehículo seleccionado para este producto");
     } else {
       const inserted = await connection.query<Vehicle>(`
         insert into vehiculo (
@@ -99,7 +156,7 @@ export async function createSelfServiceQuote(input: CreateQuoteInput) {
         select $1,tv.id,$3,$4,$5,$6,$7,$8,$9,nullif($10,'')
         from tipo_vehiculo tv where tv.id=$2 and tv.producto_id=$11
         returning id,tipo_vehiculo_id,marca,modelo,color,valor_asegurado,estado_vh,uso
-      `, [input.clientId, input.vehicleTypeId, input.brand, input.model, input.year, input.color,
+      `, [effectiveClientId, input.vehicleTypeId, input.brand, input.model, input.year, input.color,
         input.insuredValue, input.vehicleStatus, input.use, input.plate || "", input.productId]);
       if (inserted.rowCount !== 1) throw new QuoteConfigurationError("El tipo de vehículo no pertenece al producto seleccionado.");
       vehicle = inserted.rows[0];
@@ -166,12 +223,13 @@ export async function createSelfServiceQuote(input: CreateQuoteInput) {
       for (let monthInYear = 0; monthInYear < 12; monthInYear += 1) {
         const insuredValue = yearStartValue - monthlyDepreciation * monthInYear;
         const netPremium = insuredValue * annualRate / 12;
+        const commission = netPremium * commissionPct;
         const banks = netPremium * Number(params.super_bancos_pct);
         const farmerInsurance = netPremium * Number(params.seguro_campesino_pct);
         const issuance = Number(params.derechos_emision_valor);
         const subtotal = netPremium + banks + farmerInsurance + issuance;
         const vat = subtotal * Number(params.iva_pct);
-        monthlyRows.push({ insuredValue, netPremium, banks, farmerInsurance, issuance, subtotal, vat, total: subtotal + vat });
+        monthlyRows.push({ insuredValue, netPremium, commission, banks, farmerInsurance, issuance, subtotal, vat, total: subtotal + vat });
       }
       yearStartValue -= yearStartValue * depreciationRate;
     }
@@ -183,19 +241,38 @@ export async function createSelfServiceQuote(input: CreateQuoteInput) {
     `, [input.productId, input.coverageIds]);
     if (coverageResult.rowCount !== input.coverageIds.length) throw new QuoteConfigurationError("Una de las coberturas seleccionadas ya no está disponible.");
 
-    const quoteResult = await connection.query<{ id: string }>(`
-      insert into cotizacion (
-        aseguradora_id,producto_id,cliente_id,vehiculo_id,usuario_id,canal_id,ciudad_id,origen,
-        anios_vigencia,tasa_promedio,nivel_riesgo,cuota_fija_mensual,
-        fecha_inicio_vigencia,fecha_fin_vigencia,estado
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::date,
-        case when $13::date is null then null else ($13::date + make_interval(years=>$9) - interval '1 day')::date end,
-        'PENDIENTE') returning id
-    `, [product.aseguradora_id, input.productId, input.clientId, vehicle.id,
-      input.assistedBy?.userId || null,input.assistedBy?.channelId || null,profile.ciudad_id,
-      input.assistedBy ? "CANAL" : "AUTOGESTION",input.durationYears, averageRate, modelRisk.nivel_riesgo, fixedPayment,
-      input.coverageStartDate || null]);
-    const quoteId = quoteResult.rows[0].id;
+    let quoteId: string;
+    if (existingQuote) {
+      const startDate = isCanal ? input.coverageStartDate || null : null;
+      const updatedQuote = await connection.query<{ id: string }>(`
+        update cotizacion set
+          producto_id=$1, ciudad_id=$2, anios_vigencia=$3, tasa_promedio=$4, nivel_riesgo=$5,
+          cuota_fija_mensual=$6, comision_canal_pct=$7,
+          fecha_inicio_vigencia=$8::date,
+          fecha_fin_vigencia = case when $8::date is null then null else ($8::date + make_interval(years=>$3) - interval '1 day')::date end
+        where id=$9
+        returning id
+      `, [input.productId, profile.ciudad_id, input.durationYears, averageRate, modelRisk.nivel_riesgo,
+        fixedPayment, commissionPct, startDate, existingQuote.id]);
+      quoteId = updatedQuote.rows[0].id;
+      await connection.query("delete from cotizacion_deducible where cotizacion_id=$1", [quoteId]);
+      await connection.query("delete from cotizacion_cobertura where cotizacion_id=$1", [quoteId]);
+      await connection.query("delete from amortizacion_mensual where cotizacion_id=$1", [quoteId]);
+    } else {
+      const quoteResult = await connection.query<{ id: string }>(`
+        insert into cotizacion (
+          aseguradora_id,producto_id,cliente_id,vehiculo_id,usuario_id,canal_id,ciudad_id,origen,
+          anios_vigencia,tasa_promedio,nivel_riesgo,cuota_fija_mensual,comision_canal_pct,
+          fecha_inicio_vigencia,fecha_fin_vigencia,estado
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$14,$13::date,
+          case when $13::date is null then null else ($13::date + make_interval(years=>$9) - interval '1 day')::date end,
+          'PENDIENTE') returning id
+      `, [product.aseguradora_id, input.productId, input.clientId, vehicle.id,
+        input.assistedBy?.userId || null, input.assistedBy?.channelId || null, profile.ciudad_id,
+        input.assistedBy ? "CANAL" : "AUTOGESTION", input.durationYears, averageRate, modelRisk.nivel_riesgo, fixedPayment,
+        input.coverageStartDate || null, commissionPct]);
+      quoteId = quoteResult.rows[0].id;
+    }
 
     const quoteCoverageIds: string[] = [];
     for (const coverage of coverageResult.rows) {
@@ -227,20 +304,29 @@ export async function createSelfServiceQuote(input: CreateQuoteInput) {
       accumulated += difference;
       await connection.query(`
         insert into amortizacion_mensual (
-          cotizacion_id,mes,valor_asegurado_mes,prima_neta_mes,super_bancos,
+          cotizacion_id,mes,valor_asegurado_mes,prima_neta_mes,comision_canal,super_bancos,
           seguro_campesino,derechos_emision,subtotal,iva,prima_total_mes,
           cuota_fija,diferencia,nivelacion_acumulada
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        ) values ($1,$2,$3,$4,$14,$5,$6,$7,$8,$9,$10,$11,$12,$13)
       `, [quoteId,index+1,row.insuredValue,row.netPremium,row.banks,row.farmerInsurance,
-        row.issuance,row.subtotal,row.vat,row.total,fixedPayment,difference,accumulated]);
+        row.issuance,row.subtotal,row.vat,row.total,fixedPayment,difference,accumulated,row.commission]);
     }
 
-    await connection.query(`
-      insert into auditoria (entidad,entidad_id,accion,datos_nuevos,usuario_id)
-      values ('COTIZACION',$1,'CREACION',jsonb_build_object(
-        'origen',$3::text,'cliente_id',$2::text,'canal_id',$4::text,'estado','PENDIENTE'
-      ),$5)
-    `, [quoteId, input.clientId,input.assistedBy ? "CANAL" : "AUTOGESTION",input.assistedBy?.channelId || null,input.assistedBy?.userId || null]);
+    if (existingQuote) {
+      await connection.query(`
+        insert into auditoria (entidad,entidad_id,accion,datos_nuevos,usuario_id)
+        values ('COTIZACION',$1,'EDICION',jsonb_build_object(
+          'recalculo',true,'cuota_fija_mensual',$2::numeric,'comision_canal_pct',$3::numeric
+        ),$4)
+      `, [quoteId, fixedPayment, commissionPct, input.editUserId || null]);
+    } else {
+      await connection.query(`
+        insert into auditoria (entidad,entidad_id,accion,datos_nuevos,usuario_id)
+        values ('COTIZACION',$1,'CREACION',jsonb_build_object(
+          'origen',$3::text,'cliente_id',$2::text,'canal_id',$4::text,'estado','PENDIENTE'
+        ),$5)
+      `, [quoteId, input.clientId, input.assistedBy ? "CANAL" : "AUTOGESTION", input.assistedBy?.channelId || null, input.assistedBy?.userId || null]);
+    }
 
     await connection.query("commit");
     return quoteId;

@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { LoaderCircle, Save } from "lucide-react";
 import { updateClientProfile } from "@/app/actions/profile";
 import { initialAuthState } from "@/lib/auth/action-state";
+import { useCedulaLookup } from "@/lib/cedula/use-cedula-lookup";
 
 type City = { id: string; nombre: string; provincia: string | null };
 type ClientProfile = {
@@ -18,11 +19,33 @@ type ClientProfile = {
 
 export function ProfileForm({ cities, profile }: { cities: City[]; profile: ClientProfile }) {
   const [state, action, pending] = useActionState(updateClientProfile, initialAuthState);
+  const [gender, setGender] = useState(profile.genero || "");
+  const [birthDate, setBirthDate] = useState(profile.fecha_nacimiento || "");
+  const [maritalStatus, setMaritalStatus] = useState(profile.estado_civil || "");
+  const [address, setAddress] = useState(profile.direccion || "");
+  const { status: lookupStatus, run: runLookup } = useCedulaLookup((data) => {
+    if (data.genero) setGender(data.genero);
+    if (data.fechaNacimiento) setBirthDate(data.fechaNacimiento);
+    if (data.estadoCivil) setMaritalStatus(data.estadoCivil);
+    if (data.direccion) setAddress(data.direccion);
+  });
+
   return (
     <form action={action} className="glass-panel mt-7 grid gap-5 p-5 sm:grid-cols-2 sm:p-7">
       {state.message && <p className="rounded-xl border border-red-300/25 bg-red-300/10 px-4 py-3 text-sm text-red-50 sm:col-span-2" role="alert">{state.message}</p>}
       <Field label="Cédula o RUC" name="identification" error={state.fields?.identification?.[0]}>
-        <input id="identification" name="identification" inputMode="numeric" required defaultValue={profile.identificacion || ""} placeholder="10 o 13 dígitos" className={inputClass} />
+        <input id="identification" name="identification" inputMode="numeric" required defaultValue={profile.identificacion || ""} placeholder="10 o 13 dígitos" onChange={(e) => runLookup(e.target.value)} onBlur={(e) => runLookup(e.target.value)} className={inputClass} />
+        {lookupStatus === "loading" && (
+          <span className="mt-2 flex items-center gap-1.5 text-xs text-white/60">
+            <LoaderCircle className="size-3 animate-spin" />Consultando cédula…
+          </span>
+        )}
+        {lookupStatus === "not-found" && (
+          <span className="mt-2 block text-xs text-amber-200">No encontramos datos para esta cédula. Ingresa los datos manualmente.</span>
+        )}
+        {lookupStatus === "error" && (
+          <span className="mt-2 block text-xs text-red-200">No pudimos consultar el servicio. Ingresa los datos manualmente.</span>
+        )}
       </Field>
       <Field label="Teléfono" name="phone" error={state.fields?.phone?.[0]}>
         <input id="phone" name="phone" type="tel" autoComplete="tel" required defaultValue={profile.telefono || ""} placeholder="+593 99 000 0000" className={inputClass} />
@@ -34,21 +57,21 @@ export function ProfileForm({ cities, profile }: { cities: City[]; profile: Clie
         </select>
       </Field>
       <Field label="Fecha de nacimiento" name="birthDate" error={state.fields?.birthDate?.[0]}>
-        <input id="birthDate" name="birthDate" type="date" autoComplete="bday" required defaultValue={profile.fecha_nacimiento || ""} className={inputClass} />
+        <input id="birthDate" name="birthDate" type="date" autoComplete="bday" required value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className={inputClass} />
       </Field>
       <Field label="Género" name="gender" error={state.fields?.gender?.[0]}>
-        <select id="gender" name="gender" required defaultValue={profile.genero || ""} className={inputClass}>
+        <select id="gender" name="gender" required value={gender} onChange={(e) => setGender(e.target.value)} className={inputClass}>
           <option value="" disabled>Selecciona una opción</option><option value="HOMBRE">Hombre</option><option value="MUJER">Mujer</option>
         </select>
       </Field>
       <Field label="Estado civil" name="maritalStatus" error={state.fields?.maritalStatus?.[0]}>
-        <select id="maritalStatus" name="maritalStatus" required defaultValue={profile.estado_civil || ""} className={inputClass}>
+        <select id="maritalStatus" name="maritalStatus" required value={maritalStatus} onChange={(e) => setMaritalStatus(e.target.value)} className={inputClass}>
           <option value="" disabled>Selecciona una opción</option><option value="SOLTERO">Soltero/a</option><option value="CASADO">Casado/a</option><option value="DIVORCIADO">Divorciado/a</option><option value="VIUDO">Viudo/a</option><option value="UNION_DE_HECHO">Unión de hecho</option>
         </select>
       </Field>
       <div className="sm:col-span-2">
         <label htmlFor="address" className="mb-2 block text-sm font-semibold">Dirección <span className="font-normal text-white/50">(opcional)</span></label>
-        <textarea id="address" name="address" rows={3} defaultValue={profile.direccion || ""} placeholder="Tu dirección" className={`${inputClass} resize-none py-3`} />
+        <textarea id="address" name="address" rows={3} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Tu dirección" className={`${inputClass} resize-none py-3`} />
       </div>
       <div className="flex justify-end sm:col-span-2">
         <button type="submit" disabled={pending} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-6 text-sm font-semibold text-[#071426] hover:opacity-90 disabled:cursor-wait disabled:opacity-65 sm:w-auto">

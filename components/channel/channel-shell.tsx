@@ -2,16 +2,15 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ChartNoAxesCombined, ChevronLeft, ChevronRight, FilePlus2, Files, LogOut, ShieldCheck, UserRound, Users } from "lucide-react";
+import { ChartNoAxesCombined, ChevronLeft, ChevronRight, Files, LogOut, ShieldCheck, UserRound, Users } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { MobileNavigationMenu } from "@/components/internal/mobile-navigation-menu";
 import type { AppSession } from "@/lib/auth/session";
 
 const items = [
   { href: "/canal", label: "Resumen", icon: ChartNoAxesCombined },
-  { href: "/canal/cotizaciones/nueva", label: "Nueva cotización", icon: FilePlus2 },
-  { href: "/canal/clientes", label: "Clientes", icon: Users },
   { href: "/canal/cotizaciones", label: "Cotizaciones", icon: Files },
+  { href: "/canal/clientes", label: "Clientes", icon: Users },
   { href: "/canal/perfil", label: "Mi perfil", icon: UserRound },
 ];
 
