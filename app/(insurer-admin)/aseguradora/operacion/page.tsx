@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Calculator, ChevronDown, FileText, ReceiptText, ShieldCheck, Table2, TriangleAlert } from "lucide-react";
+import { Calculator, ChevronDown, FileText, ReceiptText, ScanSearch, ShieldCheck, Table2, TriangleAlert } from "lucide-react";
 import { AdminPage, AdminPanel } from "@/components/admin/admin-ui";
 import { EmitPolicyForm } from "@/components/insurer/emit-policy-form";
 import { requireInsurerAdmin } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDbPool } from "@/lib/db/pool";
+import { isCarroceria, requiredSlots } from "@/lib/inspeccion/slots";
 
 export const metadata: Metadata = { title: "Operación | Arkad", robots: { index: false, follow: false } };
 
@@ -17,6 +18,13 @@ type PendingRow = {
   cliente: string;
   producto: string;
   puede_emitir: boolean;
+  inspeccion_id: string | null;
+  inspeccion_estado: string | null;
+  inspeccion_carroceria: string | null;
+  inspeccion_analisis: string | null;
+  inspeccion_revision: string | null;
+  inspeccion_fotos: string | number | null;
+  inspeccion_danos: string | number | null;
 };
 
 type Cuota = { poliza_id: string; numero_cuota: number; fecha_vencimiento: string; monto: string; estado: string };
@@ -40,10 +48,17 @@ export default async function Operation() {
                     and (am.comision_canal is null
                          or abs(am.comision_canal - round(am.prima_neta_mes * c.comision_canal_pct, 4)) > 0.01)
                 )
-              ) as puede_emitir
+              ) as puede_emitir,
+              i.id as inspeccion_id, i.estado as inspeccion_estado, i.carroceria as inspeccion_carroceria,
+              i.analisis_estado as inspeccion_analisis, i.estado_revision as inspeccion_revision,
+              (select count(*) from inspeccion_foto f where f.inspeccion_id = i.id) as inspeccion_fotos,
+              (select count(*) from inspeccion_dano d
+                 join inspeccion_foto f2 on f2.id = d.inspeccion_foto_id
+                where f2.inspeccion_id = i.id) as inspeccion_danos
        from cotizacion c
        join cliente cl on cl.id = c.cliente_id
        join producto p on p.id = c.producto_id
+       left join inspeccion i on i.cotizacion_id = c.id
        where c.aseguradora_id = $1 and c.estado = 'PENDIENTE'
        order by c.creado_en desc
        limit 100`,
@@ -96,6 +111,7 @@ export default async function Operation() {
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
+                    <InspeccionPill row={row} />
                     <Link href={`/aseguradora/operacion/${row.id}/calculo`} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/15 px-3.5 text-xs font-bold text-white/75 hover:bg-white/8">
                       <Table2 className="size-3.5" /> Ver cálculo
                     </Link>
@@ -192,6 +208,40 @@ function StatePill({ state }: { state: string }) {
     : state === "CANCELADA" ? "border-rose-200/25 bg-rose-200/10 text-rose-100"
     : "border-white/15 bg-white/6 text-white/60";
   return <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${tone}`}>{state}</span>;
+}
+
+function InspeccionPill({ row }: { row: PendingRow }) {
+  const cls = "inline-flex min-h-9 items-center rounded-full border px-3 text-xs font-bold";
+  if (!row.inspeccion_id) {
+    return <span className={`${cls} border-white/15 text-white/45`} title="Sin inspección">Sin inspección</span>;
+  }
+
+  let label: string;
+  let tone: string;
+  if (row.inspeccion_estado !== "COMPLETADA") {
+    const total = isCarroceria(row.inspeccion_carroceria) ? requiredSlots(row.inspeccion_carroceria).length : 13;
+    label = `Inspección ${Number(row.inspeccion_fotos ?? 0)}/${total}`;
+    tone = "border-amber-200/30 bg-amber-200/10 text-amber-100";
+  } else if (row.inspeccion_analisis === "PENDIENTE" || row.inspeccion_analisis === "EN_PROCESO") {
+    label = "Analizando IA";
+    tone = "border-cyan-100/25 bg-cyan-100/10 text-cyan-50";
+  } else if (row.inspeccion_revision === "APROBADA") {
+    label = "Inspección aprobada";
+    tone = "border-emerald-300/30 bg-emerald-300/10 text-emerald-50";
+  } else if (row.inspeccion_revision === "RECHAZADA") {
+    label = "Inspección rechazada";
+    tone = "border-rose-300/30 bg-rose-300/10 text-rose-50";
+  } else {
+    const n = Number(row.inspeccion_danos ?? 0);
+    label = `${n ? `${n} daño(s)` : "Sin daños"} · rev. pendiente`;
+    tone = "border-white/20 bg-white/6 text-white/70";
+  }
+
+  return (
+    <Link href={`/aseguradora/inspecciones/${row.inspeccion_id}`} className={`${cls} ${tone} hover:opacity-90`} title="Ver revisión de la inspección">
+      <ScanSearch className="mr-1.5 size-3.5" /> {label}
+    </Link>
+  );
 }
 
 function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
