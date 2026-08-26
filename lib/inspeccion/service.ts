@@ -323,7 +323,10 @@ export async function deleteInspeccion(input: {
     const inspeccionId = header.rows[0].id;
 
     const fotos = await conn.query<{ storage_path: string }>(
-      "select storage_path from inspeccion_foto where inspeccion_id = $1",
+      `select storage_path from inspeccion_foto where inspeccion_id = $1
+       union all
+       select analizada_storage_path from inspeccion_foto
+        where inspeccion_id = $1 and analizada_storage_path is not null`,
       [inspeccionId],
     );
     objectPaths.push(...fotos.rows.map((row) => row.storage_path));

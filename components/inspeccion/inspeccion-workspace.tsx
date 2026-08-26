@@ -24,7 +24,12 @@ import {
   type Carroceria,
   type SlotCode,
 } from "@/lib/inspeccion/slots";
-import { initialInspeccionState, type InspeccionFotoView, type InspeccionView } from "@/lib/inspeccion/types";
+import {
+  initialInspeccionState,
+  type FotoMutationResult,
+  type InspeccionFotoView,
+  type InspeccionView,
+} from "@/lib/inspeccion/types";
 import { CarroceriaIcon } from "@/components/inspeccion/carroceria-icons";
 import { Silhouette } from "@/components/inspeccion/silhouettes";
 
@@ -125,6 +130,33 @@ function SlotBoard({
   const [captureSlot, setCaptureSlot] = useState<SlotCode | null>(null);
   const [busySlot, setBusySlot] = useState<SlotCode | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const analisisKickRef = useRef(false);
+
+  // Fase 2: al completar la inspección, adelantar el análisis de daños en segundo
+  // plano (sin UI). El cron es la garantía; esto sólo acelera cuando hay alguien.
+  const kickAnalisis = useCallback(() => {
+    if (analisisKickRef.current) return;
+    analisisKickRef.current = true;
+    void (async () => {
+      try {
+        for (let i = 0; i < 20; i++) {
+          const r = await fetch("/api/inspeccion/analizar", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ cotizacionId }),
+          });
+          if (!r.ok) break;
+          const body = (await r.json().catch(() => null)) as { pendientes?: number } | null;
+          if (!body || !body.pendientes) break;
+        }
+        router.refresh();
+      } catch {
+        // best-effort; el cron termina el trabajo
+      } finally {
+        analisisKickRef.current = false;
+      }
+    })();
+  }, [cotizacionId, router]);
 
   const slots = requiredSlots(inspeccion.carroceria);
   const fotoBySlot = new Map(inspeccion.fotos.map((foto) => [foto.slot, foto] as const));
@@ -191,9 +223,10 @@ function SlotBoard({
           cotizacionId={cotizacionId}
           slot={captureSlot}
           onClose={() => setCaptureSlot(null)}
-          onSaved={() => {
+          onSaved={(result) => {
             setCaptureSlot(null);
             router.refresh();
+            if (result?.estado === "COMPLETADA") kickAnalisis();
           }}
         />
       )}
@@ -423,7 +456,7 @@ function CaptureModal({
   cotizacionId: string;
   slot: SlotCode;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (result: FotoMutationResult | null) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -574,12 +607,12 @@ function CaptureModal({
         form.set("geoCapturadoEn", geo.capturadoEn);
       }
       const response = await fetch("/api/inspeccion/fotos", { method: "POST", body: form });
+      const body = await response.json().catch(() => null);
       if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error || "No pudimos guardar la foto.");
+        throw new Error(body?.error || "No pudimos guardar la foto.");
       }
       URL.revokeObjectURL(preview.url);
-      onSaved();
+      onSaved((body as FotoMutationResult | null) ?? null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "No pudimos guardar la foto.");
       setUploading(false);

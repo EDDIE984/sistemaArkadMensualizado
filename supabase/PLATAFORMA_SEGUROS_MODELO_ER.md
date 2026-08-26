@@ -125,6 +125,7 @@ erDiagram
     COTIZACION ||--o| POLIZA : "se convierte en (si es aceptada)"
     COTIZACION ||--o| INSPECCION : "se inspecciona (opcional, informativo)"
     INSPECCION ||--o{ INSPECCION_FOTO : contiene
+    INSPECCION_FOTO ||--o{ INSPECCION_DANO : "detecta (análisis IA)"
 
     POLIZA ||--o{ TABLA_COBRANZA : genera
     TABLA_COBRANZA ||--o{ PAGO : recibe
@@ -567,15 +568,19 @@ erDiagram
         string carroceria "SEDAN|SUV|STATION_WAGON|HATCHBACK|LCV|CAMIONETA|MINIVAN"
         string estado "EN_PROGRESO|COMPLETADA (derivado de slots requeridos; informativo)"
         string origen "AUTOGESTION|CANAL (snapshot de COTIZACION.origen)"
+        string analisis_estado "PENDIENTE|EN_PROCESO|COMPLETADO|CON_ERRORES (rollup del análisis IA)"
+        string calificacion_dano "SIN_DANOS|LEVE|MODERADA|GRAVE (peor severidad; nullable)"
         timestamp creado_en
         timestamp completada_en
+        timestamp analisis_completado_en
     }
 
     INSPECCION_FOTO {
         uuid id PK
         uuid inspeccion_id FK
         string slot "FRENTE|ATRAS|LATERAL_*|MOTOR|CAJUELA|INTERIOR_TABLERO|ASIENTOS_*|PUERTA_INT_* (unique por inspección)"
-        string storage_path "objeto en bucket privado 'inspecciones'"
+        string storage_path "objeto original en bucket privado 'inspecciones'"
+        string analizada_storage_path "PNG anotado con los daños (nullable)"
         string mime "image/jpeg|image/webp"
         int bytes
         int ancho
@@ -585,6 +590,29 @@ erDiagram
         decimal precision_m
         timestamp geo_capturado_en
         string capturado_con "CAMARA|ARCHIVO"
+        string analisis_estado "PENDIENTE|ANALIZANDO|ANALIZADA|SIN_DANOS|ERROR"
+        string analisis_modelo "modelo de visión usado (ej. gpt-4o)"
+        string analisis_error "mensaje si analisis_estado=ERROR"
+        int danos_total
+        string dano_peor "LEVE|MODERADA|GRAVE (nullable)"
+        timestamp analisis_iniciado_en
+        timestamp analizada_en
+        timestamp creado_en
+    }
+
+    INSPECCION_DANO {
+        uuid id PK
+        uuid inspeccion_foto_id FK
+        string tipo "RAYON|ABOLLADURA|HUNDIMIENTO|FISURA|PIEZA_ROTA|PIEZA_FALTANTE|DESALINEACION|CRISTAL_ROTO|PINTURA_SALTADA|CORROSION|LLANTA|OTRO"
+        string severidad "LEVE|MODERADA|GRAVE"
+        string accion_recomendada "PULIR|PINTAR|REPARAR|REEMPLAZAR|REVISAR"
+        string pieza "texto libre, ej. 'parachoque delantero'"
+        string descripcion
+        decimal bbox_x "recuadro normalizado 0..1"
+        decimal bbox_y
+        decimal bbox_w
+        decimal bbox_h
+        decimal confianza "0..1 (nullable)"
         timestamp creado_en
     }
 ```
@@ -724,7 +752,7 @@ sequenceDiagram
     Note over DB: Pagos futuros → INSERT PAGO ligado a cada cobranza_id
 ```
 
-### Variante: inspección fotográfica de la cotización (fase 1, informativa)
+### Variante: inspección fotográfica de la cotización (informativa)
 
 Una vez creada la `COTIZACION`, en su pantalla de detalle aparece un botón
 **"Inspección"** disponible para el cliente (autogestión, en `/mi-cuenta`) y para
@@ -747,9 +775,24 @@ el agente de canal (`/canal`). Al abrir la página de inspección:
    una foto por cada toma requerida. Este estado es **sólo informativo**: no se
    lee ni se escribe en `COTIZACION.estado`, y la aceptación de la cotización y la
    emisión de la póliza funcionan igual con o sin inspección.
+4. **Análisis de daños con IA (backend, se dispara al pasar a `COMPLETADA`).** Un
+   cron (`/api/inspeccion/analizar/cron`, autenticado con `CRON_SECRET`) barre las
+   inspecciones `COMPLETADA` con análisis pendiente y procesa las fotos en lotes;
+   además el cliente dispara el mismo endpoint sin UI apenas se completa. Por cada
+   foto: se reduce a ~1024 px y se envía a OpenAI (`OPENAI_VISION_MODEL`, default
+   `gpt-4o`), que devuelve una lista de daños, cada uno con `tipo`, `severidad`
+   (`LEVE|MODERADA|GRAVE`), `accion_recomendada`, `pieza` y un recuadro
+   normalizado `bbox` (aproximado). Se guarda una fila por daño en
+   `INSPECCION_DANO`, se marca `INSPECCION_FOTO.analisis_estado`
+   (`ANALIZADA|SIN_DANOS|ERROR`) y, si hubo daños, se genera y sube un **PNG
+   anotado** (original + recuadros) a `INSPECCION_FOTO.analizada_storage_path` en
+   el mismo bucket. `INSPECCION.calificacion_dano` y `INSPECCION.analisis_estado`
+   son el rollup. Todo esto es **informativo**: no toca `COTIZACION.estado` ni la
+   emisión. Los resultados viven sólo en BD/Storage — la pantalla de daños llega
+   con el panel del inspector (fase posterior).
 
 Sólo se audita a nivel `INSPECCION` (`CREACION` al iniciarla, `CAMBIO_ESTADO` al
-completarse), no cada foto.
+completarse y en cada `ANALISIS_FOTO` vía `datos_nuevos.accion`), no cada foto.
 
 ---
 
@@ -869,7 +912,7 @@ completarse), no cada foto.
     `comision_canal_pct > 0` también la registra, aunque su cotización no tenga
     `canal_id`; por eso debe mantenerse en 0 salvo que se quiera reservar un
     corte interno sin canal externo.
-16. **Inspección fotográfica (fase 1: informativa).** `INSPECCION` es 1:0..1 con
+16. **Inspección fotográfica (informativa).** `INSPECCION` es 1:0..1 con
     `COTIZACION` (`unique(cotizacion_id)`) y sólo existe si el cliente (autogestión)
     o el agente de canal la inicia desde el detalle de la cotización. La
     `carroceria` (`SEDAN|SUV|STATION_WAGON|HATCHBACK|LCV|CAMIONETA|MINIVAN`) se
@@ -881,19 +924,39 @@ completarse), no cada foto.
     dominios con CHECK. Las fotos se guardan en Supabase Storage privado (bucket
     `inspecciones`); `INSPECCION_FOTO` sólo persiste `storage_path` + metadatos
     (`mime`, `bytes`, `ancho`, `alto`, `capturado_con`) y la **geolocalización
-    capturada por el navegador** (`lat`, `lng`, `precision_m`, `geo_capturado_en`),
-    pensada para el panel del inspector de la fase 2. Nunca se guarda el binario
-    en la BD (ni base64). Una re-toma reemplaza la fila y el objeto
-    (`unique(inspeccion_id, slot)`), sin historial. `INSPECCION.estado`
+    capturada por el navegador** (`lat`, `lng`, `precision_m`, `geo_capturado_en`).
+    Nunca se guarda el binario en la BD (ni base64). Una re-toma reemplaza la fila
+    y el objeto (`unique(inspeccion_id, slot)`), sin historial. `INSPECCION.estado`
     (`EN_PROGRESO|COMPLETADA`) se **deriva** de cubrir todos los slots requeridos
     y es puramente informativo: **no** condiciona `COTIZACION.estado`, la
     aceptación ni la emisión de póliza. La subida/borrado de binarios va por un
     Route Handler con `service_role` (los Server Actions topan en 1 MB); iniciar
-    la inspección y cambiar la carrocería van por Server Action. `INSPECCION` e
-    `INSPECCION_FOTO` llevan RLS activado sin políticas + `revoke` a
-    `anon, authenticated` (sólo `service_role`), como las tablas sensibles de
-    autenticación. La auditoría se registra sólo a nivel `INSPECCION`
-    (`CREACION` al iniciar, `CAMBIO_ESTADO` al completarse), no por foto.
+    la inspección y cambiar la carrocería van por Server Action. `INSPECCION`,
+    `INSPECCION_FOTO` e `INSPECCION_DANO` llevan RLS activado sin políticas +
+    `revoke` a `anon, authenticated` (sólo `service_role`), como las tablas
+    sensibles de autenticación.
+
+    **Análisis de daños con IA:** al pasar la inspección a `COMPLETADA` se analiza
+    cada foto con OpenAI (`OPENAI_VISION_MODEL`, default `gpt-4o`). El disparo es
+    un cron (`/api/inspeccion/analizar/cron`, `CRON_SECRET`) que procesa por lotes
+    (≤4 fotos por invocación para no chocar el timeout serverless) — el cliente
+    dispara el mismo endpoint sin UI apenas se completa, para acelerar. Por foto se
+    guarda una fila por daño en `INSPECCION_DANO` (`tipo`, `severidad`
+    `LEVE|MODERADA|GRAVE`, `accion_recomendada`, `pieza`, `bbox_*` normalizado
+    0..1, `confianza`), se setea `INSPECCION_FOTO.analisis_estado`
+    (`PENDIENTE→ANALIZANDO→ANALIZADA|SIN_DANOS|ERROR`) y, si hubo daños, se genera
+    con `sharp` un **PNG anotado** (original + recuadros) y se sube a
+    `INSPECCION_FOTO.analizada_storage_path` (mismo bucket; la migración habilita
+    `image/png` en `allowed_mime_types`). `INSPECCION.analisis_estado`
+    (`PENDIENTE|EN_PROCESO|COMPLETADO|CON_ERRORES`) y `INSPECCION.calificacion_dano`
+    (peor severidad) son el rollup. Se conservan **ambas** imágenes (original y
+    anotada). Todo esto sigue siendo informativo: **no** toca `COTIZACION.estado`
+    ni la emisión. Los resultados viven sólo en BD/Storage; la pantalla de daños
+    llega con el panel del inspector (fase posterior).
+
+    La auditoría se registra sólo a nivel `INSPECCION` (`CREACION` al iniciar,
+    `CAMBIO_ESTADO` al completarse y por cada `ANALISIS_FOTO` vía
+    `datos_nuevos.accion`), no por foto ni por daño.
 
 ---
 
