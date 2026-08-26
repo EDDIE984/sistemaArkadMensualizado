@@ -123,6 +123,8 @@ erDiagram
     COTIZACION ||--o{ COTIZACION_DEDUCIBLE : incluye
     COTIZACION ||--o{ AMORTIZACION_MENSUAL : calcula
     COTIZACION ||--o| POLIZA : "se convierte en (si es aceptada)"
+    COTIZACION ||--o| INSPECCION : "se inspecciona (opcional, informativo)"
+    INSPECCION ||--o{ INSPECCION_FOTO : contiene
 
     POLIZA ||--o{ TABLA_COBRANZA : genera
     TABLA_COBRANZA ||--o{ PAGO : recibe
@@ -558,6 +560,33 @@ erDiagram
         uuid usuario_id FK
         timestamp creado_en
     }
+
+    INSPECCION {
+        uuid id PK
+        uuid cotizacion_id FK "unique — una inspección por cotización"
+        string carroceria "SEDAN|SUV|STATION_WAGON|HATCHBACK|LCV|CAMIONETA|MINIVAN"
+        string estado "EN_PROGRESO|COMPLETADA (derivado de slots requeridos; informativo)"
+        string origen "AUTOGESTION|CANAL (snapshot de COTIZACION.origen)"
+        timestamp creado_en
+        timestamp completada_en
+    }
+
+    INSPECCION_FOTO {
+        uuid id PK
+        uuid inspeccion_id FK
+        string slot "FRENTE|ATRAS|LATERAL_*|MOTOR|CAJUELA|INTERIOR_TABLERO|ASIENTOS_*|PUERTA_INT_* (unique por inspección)"
+        string storage_path "objeto en bucket privado 'inspecciones'"
+        string mime "image/jpeg|image/webp"
+        int bytes
+        int ancho
+        int alto
+        decimal lat "geolocalización del navegador al capturar; nullable"
+        decimal lng
+        decimal precision_m
+        timestamp geo_capturado_en
+        string capturado_con "CAMARA|ARCHIVO"
+        timestamp creado_en
+    }
 ```
 
 ---
@@ -695,6 +724,33 @@ sequenceDiagram
     Note over DB: Pagos futuros → INSERT PAGO ligado a cada cobranza_id
 ```
 
+### Variante: inspección fotográfica de la cotización (fase 1, informativa)
+
+Una vez creada la `COTIZACION`, en su pantalla de detalle aparece un botón
+**"Inspección"** disponible para el cliente (autogestión, en `/mi-cuenta`) y para
+el agente de canal (`/canal`). Al abrir la página de inspección:
+
+1. Si aún no existe `INSPECCION` para esa cotización, el usuario elige la
+   **carrocería** del vehículo (`SEDAN|SUV|STATION_WAGON|HATCHBACK|LCV|CAMIONETA|MINIVAN`).
+   Eso ejecuta un Server Action que `INSERT INSPECCION` (`estado='EN_PROGRESO'`,
+   `origen` copiado de `COTIZACION.origen`).
+2. La carrocería determina el conjunto de **tomas requeridas** (matriz en
+   `lib/inspeccion/slots.ts`: 11 tomas base + 2 de puertas traseras salvo
+   `LCV`/`CAMIONETA`). Por cada toma el usuario captura una foto con la cámara del
+   dispositivo (guía de silueta superpuesta) o, si no hay cámara / se niega el
+   permiso, con el selector de archivos. La imagen se comprime en el navegador
+   (~1600 px, JPEG) y se sube por un **Route Handler** (`service_role`) que
+   `PUT` del objeto en el bucket privado `inspecciones` e `INSERT/replace` en
+   `INSPECCION_FOTO` (con `lat/lng/precision_m/geo_capturado_en` del navegador si
+   el usuario concedió geolocalización). Re-tomar una foto reemplaza fila y objeto.
+3. `INSPECCION.estado` pasa a `COMPLETADA` (y se fija `completada_en`) cuando hay
+   una foto por cada toma requerida. Este estado es **sólo informativo**: no se
+   lee ni se escribe en `COTIZACION.estado`, y la aceptación de la cotización y la
+   emisión de la póliza funcionan igual con o sin inspección.
+
+Sólo se audita a nivel `INSPECCION` (`CREACION` al iniciarla, `CAMBIO_ESTADO` al
+completarse), no cada foto.
+
 ---
 
 ## 4. Reglas clave de diseño (para que Claude Code no las reinterprete)
@@ -813,6 +869,31 @@ sequenceDiagram
     `comision_canal_pct > 0` también la registra, aunque su cotización no tenga
     `canal_id`; por eso debe mantenerse en 0 salvo que se quiera reservar un
     corte interno sin canal externo.
+16. **Inspección fotográfica (fase 1: informativa).** `INSPECCION` es 1:0..1 con
+    `COTIZACION` (`unique(cotizacion_id)`) y sólo existe si el cliente (autogestión)
+    o el agente de canal la inicia desde el detalle de la cotización. La
+    `carroceria` (`SEDAN|SUV|STATION_WAGON|HATCHBACK|LCV|CAMIONETA|MINIVAN`) se
+    elige al inspeccionar y vive en `INSPECCION`, **no** en `VEHICULO`
+    (`VEHICULO.tipo_vehiculo_id` es la categoría tarifaria del producto, no la
+    forma de la carrocería). El catálogo de tomas (slots) y la matriz
+    `carroceria → slots requeridos` viven en código (`lib/inspeccion/slots.ts`),
+    no en tablas: no son catálogos editables por tenant y la BD sólo fija los
+    dominios con CHECK. Las fotos se guardan en Supabase Storage privado (bucket
+    `inspecciones`); `INSPECCION_FOTO` sólo persiste `storage_path` + metadatos
+    (`mime`, `bytes`, `ancho`, `alto`, `capturado_con`) y la **geolocalización
+    capturada por el navegador** (`lat`, `lng`, `precision_m`, `geo_capturado_en`),
+    pensada para el panel del inspector de la fase 2. Nunca se guarda el binario
+    en la BD (ni base64). Una re-toma reemplaza la fila y el objeto
+    (`unique(inspeccion_id, slot)`), sin historial. `INSPECCION.estado`
+    (`EN_PROGRESO|COMPLETADA`) se **deriva** de cubrir todos los slots requeridos
+    y es puramente informativo: **no** condiciona `COTIZACION.estado`, la
+    aceptación ni la emisión de póliza. La subida/borrado de binarios va por un
+    Route Handler con `service_role` (los Server Actions topan en 1 MB); iniciar
+    la inspección y cambiar la carrocería van por Server Action. `INSPECCION` e
+    `INSPECCION_FOTO` llevan RLS activado sin políticas + `revoke` a
+    `anon, authenticated` (sólo `service_role`), como las tablas sensibles de
+    autenticación. La auditoría se registra sólo a nivel `INSPECCION`
+    (`CREACION` al iniciar, `CAMBIO_ESTADO` al completarse), no por foto.
 
 ---
 

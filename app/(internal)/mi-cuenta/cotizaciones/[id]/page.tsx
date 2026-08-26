@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, CalendarDays, CarFront, ShieldCheck, TrendingUp } from "lucide-react";
+import { ArrowLeft, CalendarDays, CarFront, ScanLine, ShieldCheck, TrendingUp } from "lucide-react";
 import { requireSession } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isCarroceria, requiredSlots } from "@/lib/inspeccion/slots";
 
 export const metadata: Metadata = { title: "Detalle de cotización | Confia", robots: { index: false, follow: false } };
 
@@ -18,9 +19,11 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
     producto(nombre),aseguradora(nombre_comercial),ciudad(nombre,provincia),
     vehiculo(marca,modelo,anio,color,valor_asegurado,estado_vh,uso,placa),
     cotizacion_cobertura(valor_aplicado,producto_cobertura(cobertura_base(nombre,descripcion_generica))),
-    cotizacion_deducible(valor_aplicado,producto_deducible(deducible_base(nombre,tipo_calculo)))
+    cotizacion_deducible(valor_aplicado,producto_deducible(deducible_base(nombre,tipo_calculo))),
+    inspeccion(carroceria,estado,inspeccion_foto(count))
   `).eq("id", id).eq("cliente_id", session.actorId).maybeSingle();
   if (!quote) redirect("/mi-cuenta/cotizaciones");
+  const inspeccionBadge = inspectionBadge(quote.inspeccion);
   const [{ data: schedule }, { data: losses }] = await Promise.all([
     db.from("amortizacion_mensual").select("mes,valor_asegurado_mes,prima_total_mes,cuota_fija").eq("cotizacion_id", id).order("mes"),
     db.from("tabla_perdidas").select("perdidas_parciales,perdidas_totales").eq("producto_id", quote.producto_id).eq("nivel_riesgo", quote.nivel_riesgo).maybeSingle(),
@@ -36,7 +39,10 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
     {query.created === "1" && <p className="mt-3 rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm text-emerald-50">Cotización calculada y guardada correctamente.</p>}
     <header className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-100/70">{insurer?.nombre_comercial}</p><h1 className="mt-2 text-[34px] font-bold tracking-[-0.035em] sm:text-[44px]">{vehicle?.marca} {vehicle?.modelo}</h1><p className="mt-2 text-sm text-white/58">{product?.nombre} · {city?.nombre}{city?.provincia ? `, ${city.provincia}` : ""}</p></div>
-      <span className="w-fit rounded-full border border-cyan-100/20 bg-cyan-100/10 px-4 py-2 text-xs font-bold uppercase tracking-wider text-cyan-50">{quote.estado}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href={`/mi-cuenta/cotizaciones/${id}/inspeccion`} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-cyan-100/25 bg-cyan-100/10 px-4 text-xs font-bold uppercase tracking-wider text-cyan-50 hover:bg-cyan-100/16"><ScanLine className="size-4" /> Inspección{inspeccionBadge ? ` · ${inspeccionBadge}` : ""}</Link>
+        <span className="w-fit rounded-full border border-cyan-100/20 bg-cyan-100/10 px-4 py-2 text-xs font-bold uppercase tracking-wider text-cyan-50">{quote.estado}</span>
+      </div>
     </header>
 
     <section className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -63,3 +69,10 @@ function Detail({ label, value }: { label: string; value: string }) { return <di
 function first<T>(value: T | T[] | null): T | null { return Array.isArray(value) ? value[0] || null : value; }
 function money(value: number) { return new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD" }).format(value); }
 function title(value: string) { return value.toLowerCase().replace(/_/g, " ").replace(/(^|\s)\S/g, (letter) => letter.toUpperCase()); }
+function inspectionBadge(value: unknown): string | null {
+  const row = first(value as { carroceria?: string; estado?: string; inspeccion_foto?: { count: number }[] } | null);
+  if (!row || !isCarroceria(row.carroceria)) return null;
+  if (row.estado === "COMPLETADA") return "Completada";
+  const count = Array.isArray(row.inspeccion_foto) ? row.inspeccion_foto[0]?.count ?? 0 : 0;
+  return `${count}/${requiredSlots(row.carroceria).length}`;
+}
