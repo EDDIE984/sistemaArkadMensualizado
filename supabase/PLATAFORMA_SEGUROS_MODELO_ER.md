@@ -126,6 +126,7 @@ erDiagram
     COTIZACION ||--o| INSPECCION : "se inspecciona (opcional, informativo)"
     INSPECCION ||--o{ INSPECCION_FOTO : contiene
     INSPECCION_FOTO ||--o{ INSPECCION_DANO : "detecta (análisis IA)"
+    USUARIO ||--o{ INSPECCION : "revisa (opcional)"
 
     POLIZA ||--o{ TABLA_COBRANZA : genera
     TABLA_COBRANZA ||--o{ PAGO : recibe
@@ -569,10 +570,14 @@ erDiagram
         string estado "EN_PROGRESO|COMPLETADA (derivado de slots requeridos; informativo)"
         string origen "AUTOGESTION|CANAL (snapshot de COTIZACION.origen)"
         string analisis_estado "PENDIENTE|EN_PROCESO|COMPLETADO|CON_ERRORES (rollup del análisis IA)"
-        string calificacion_dano "SIN_DANOS|LEVE|MODERADA|GRAVE (peor severidad; nullable)"
+        string calificacion_dano "SIN_DANOS|LEVE|MODERADA|GRAVE (peor severidad IA; nullable)"
+        string estado_revision "PENDIENTE|APROBADA|RECHAZADA (lo setea el inspector de la aseguradora)"
+        uuid revisado_por_usuario_id FK "USUARIO que aprobó/rechazó; nullable"
+        string revision_motivo "motivo obligatorio al aprobar/rechazar; nullable hasta revisar"
         timestamp creado_en
         timestamp completada_en
         timestamp analisis_completado_en
+        timestamp revisado_en
     }
 
     INSPECCION_FOTO {
@@ -595,6 +600,7 @@ erDiagram
         string analisis_error "mensaje si analisis_estado=ERROR"
         int danos_total
         string dano_peor "LEVE|MODERADA|GRAVE (nullable)"
+        string observacion_tecnico "nota del inspector de la aseguradora sobre esta foto; nullable"
         timestamp analisis_iniciado_en
         timestamp analizada_en
         timestamp creado_en
@@ -604,7 +610,8 @@ erDiagram
         uuid id PK
         uuid inspeccion_foto_id FK
         string tipo "RAYON|ABOLLADURA|HUNDIMIENTO|FISURA|PIEZA_ROTA|PIEZA_FALTANTE|DESALINEACION|CRISTAL_ROTO|PINTURA_SALTADA|CORROSION|LLANTA|OTRO"
-        string severidad "LEVE|MODERADA|GRAVE"
+        string severidad "LEVE|MODERADA|GRAVE (dictamen de la IA; no se sobrescribe)"
+        string severidad_revisada "LEVE|MODERADA|GRAVE — override del técnico; null = se usa la de la IA"
         string accion_recomendada "PULIR|PINTAR|REPARAR|REEMPLAZAR|REVISAR"
         string pieza "texto libre, ej. 'parachoque delantero'"
         string descripcion
@@ -613,6 +620,7 @@ erDiagram
         decimal bbox_w
         decimal bbox_h
         decimal confianza "0..1 (nullable)"
+        timestamp dano_revisado_en "cuándo el técnico ajustó la gravedad; nullable"
         timestamp creado_en
     }
 ```
@@ -788,11 +796,20 @@ el agente de canal (`/canal`). Al abrir la página de inspección:
    anotado** (original + recuadros) a `INSPECCION_FOTO.analizada_storage_path` en
    el mismo bucket. `INSPECCION.calificacion_dano` y `INSPECCION.analisis_estado`
    son el rollup. Todo esto es **informativo**: no toca `COTIZACION.estado` ni la
-   emisión. Los resultados viven sólo en BD/Storage — la pantalla de daños llega
-   con el panel del inspector (fase posterior).
+   emisión. Los resultados viven sólo en BD/Storage.
+5. **Revisión del inspector de la aseguradora.** Un `ADMIN_ASEGURADORA` entra a
+   `/aseguradora/inspecciones` (solo ve inspecciones `COMPLETADA` de cotizaciones
+   con `COTIZACION.aseguradora_id` propio). En el detalle puede: escribir una
+   `INSPECCION_FOTO.observacion_tecnico` por foto, corregir la gravedad de cada
+   daño (`INSPECCION_DANO.severidad_revisada`; la `severidad` de la IA se
+   conserva), y **aprobar o rechazar con un motivo obligatorio**
+   (`INSPECCION.estado_revision`, `revisado_por_usuario_id`, `revisado_en`,
+   `revision_motivo`). También es **informativo**: no toca `COTIZACION.estado`, la
+   aceptación ni la emisión.
 
 Sólo se audita a nivel `INSPECCION` (`CREACION` al iniciarla, `CAMBIO_ESTADO` al
-completarse y en cada `ANALISIS_FOTO` vía `datos_nuevos.accion`), no cada foto.
+completarse, en cada `ANALISIS_FOTO`, y en `APROBACION`/`RECHAZO`/`REVISION_TECNICO`
+vía `datos_nuevos.accion`), no cada foto ni cada daño.
 
 ---
 
@@ -949,14 +966,27 @@ completarse y en cada `ANALISIS_FOTO` vía `datos_nuevos.accion`), no cada foto.
     `INSPECCION_FOTO.analizada_storage_path` (mismo bucket; la migración habilita
     `image/png` en `allowed_mime_types`). `INSPECCION.analisis_estado`
     (`PENDIENTE|EN_PROCESO|COMPLETADO|CON_ERRORES`) y `INSPECCION.calificacion_dano`
-    (peor severidad) son el rollup. Se conservan **ambas** imágenes (original y
+    (peor severidad IA) son el rollup. Se conservan **ambas** imágenes (original y
     anotada). Todo esto sigue siendo informativo: **no** toca `COTIZACION.estado`
-    ni la emisión. Los resultados viven sólo en BD/Storage; la pantalla de daños
-    llega con el panel del inspector (fase posterior).
+    ni la emisión.
+
+    **Revisión del inspector:** un `ADMIN_ASEGURADORA` revisa las inspecciones
+    `COMPLETADA` de sus cotizaciones desde `/aseguradora/inspecciones` (scope por
+    `COTIZACION.aseguradora_id`, ya que `INSPECCION` no tiene `aseguradora_id`).
+    Puede fijar `INSPECCION_FOTO.observacion_tecnico` por foto y
+    `INSPECCION_DANO.severidad_revisada` por daño (la `severidad` de la IA no se
+    sobrescribe; la gravedad "efectiva" = `coalesce(severidad_revisada, severidad)`),
+    y **aprobar o rechazar con motivo obligatorio** (`INSPECCION.estado_revision`
+    `PENDIENTE|APROBADA|RECHAZADA`, `revisado_por_usuario_id`, `revisado_en`,
+    `revision_motivo`). Sigue siendo informativo: no condiciona `COTIZACION.estado`,
+    la aceptación ni la emisión. Las acciones van por Server Action con
+    `requireInsurerAdmin` (archivo `app/actions/inspeccion-revision.ts`, separado del
+    de cliente/canal).
 
     La auditoría se registra sólo a nivel `INSPECCION` (`CREACION` al iniciar,
-    `CAMBIO_ESTADO` al completarse y por cada `ANALISIS_FOTO` vía
-    `datos_nuevos.accion`), no por foto ni por daño.
+    `CAMBIO_ESTADO` al completarse, por cada `ANALISIS_FOTO`, y en
+    `APROBACION`/`RECHAZO`/`REVISION_TECNICO` vía `datos_nuevos.accion`), no por foto
+    ni por daño.
 
 ---
 

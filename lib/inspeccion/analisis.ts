@@ -11,6 +11,15 @@ import { getDbPool } from "@/lib/db/pool";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { INSPECCION_BUCKET } from "@/lib/inspeccion/data";
 import { SLOT_LABELS, type SlotCode } from "@/lib/inspeccion/slots";
+import {
+  ACCIONES,
+  DANO_TIPOS,
+  SEV_COLOR,
+  SEVERIDADES,
+  TIPO_LABEL,
+  worstSeverity,
+  type Severidad,
+} from "@/lib/inspeccion/labels";
 
 /* ------------------------------------------------------------------ */
 /* Config                                                              */
@@ -43,25 +52,6 @@ async function removeObject(path: string | null): Promise<void> {
 /* ------------------------------------------------------------------ */
 /* Taxonomía y schema de salida de la IA                               */
 /* ------------------------------------------------------------------ */
-
-const DANO_TIPOS = [
-  "RAYON",
-  "ABOLLADURA",
-  "HUNDIMIENTO",
-  "FISURA",
-  "PIEZA_ROTA",
-  "PIEZA_FALTANTE",
-  "DESALINEACION",
-  "CRISTAL_ROTO",
-  "PINTURA_SALTADA",
-  "CORROSION",
-  "LLANTA",
-  "OTRO",
-] as const;
-const SEVERIDADES = ["LEVE", "MODERADA", "GRAVE"] as const;
-const ACCIONES = ["PULIR", "PINTAR", "REPARAR", "REEMPLAZAR", "REVISAR"] as const;
-
-type Severidad = (typeof SEVERIDADES)[number];
 
 const analisisSchema = z.object({
   danos: z.array(
@@ -127,37 +117,6 @@ const SYSTEM_PROMPT = [
   "- No inventes daños que no se ven. No reportes suciedad, reflejos, sombras ni el estado normal de uso como daño.",
   "- Responde SIEMPRE en el formato JSON indicado, en español.",
 ].join("\n");
-
-const TIPO_LABEL: Record<(typeof DANO_TIPOS)[number], string> = {
-  RAYON: "Rayón",
-  ABOLLADURA: "Abolladura",
-  HUNDIMIENTO: "Hundimiento",
-  FISURA: "Fisura",
-  PIEZA_ROTA: "Pieza rota",
-  PIEZA_FALTANTE: "Pieza faltante",
-  DESALINEACION: "Desalineación",
-  CRISTAL_ROTO: "Cristal roto",
-  PINTURA_SALTADA: "Pintura saltada",
-  CORROSION: "Corrosión",
-  LLANTA: "Llanta",
-  OTRO: "Otro",
-};
-
-const SEV_COLOR: Record<Severidad, string> = {
-  LEVE: "#22c55e",
-  MODERADA: "#f59e0b",
-  GRAVE: "#ef4444",
-};
-
-const SEV_RANK: Record<Severidad, number> = { LEVE: 1, MODERADA: 2, GRAVE: 3 };
-
-function worstSeverity(list: Severidad[]): Severidad | null {
-  let worst: Severidad | null = null;
-  for (const s of list) {
-    if (!worst || SEV_RANK[s] > SEV_RANK[worst]) worst = s;
-  }
-  return worst;
-}
 
 function round5(n: number): number {
   return Math.round(n * 1e5) / 1e5;
