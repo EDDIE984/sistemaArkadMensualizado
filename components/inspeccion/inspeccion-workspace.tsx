@@ -13,7 +13,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { cambiarCarroceria, iniciarInspeccion } from "@/app/actions/inspeccion";
+import { cambiarCarroceria, eliminarInspeccion, iniciarInspeccion } from "@/app/actions/inspeccion";
 import { compressToJpeg } from "@/lib/inspeccion/compress";
 import {
   CARROCERIAS,
@@ -203,10 +203,13 @@ function SlotBoard({
 
 function ProgressHeader({ cotizacionId, inspeccion }: { cotizacionId: string; inspeccion: InspeccionView }) {
   const [state, action, pending] = useActionState(cambiarCarroceria, initialInspeccionState);
+  const [deleteState, deleteAction, deletePending] = useActionState(eliminarInspeccion, initialInspeccionState);
   const [carroceria, setCarroceria] = useState<Carroceria>(inspeccion.carroceria);
   const [editing, setEditing] = useState(false);
   const pct = inspeccion.requeridas ? Math.round((inspeccion.completadas / inspeccion.requeridas) * 100) : 0;
   const done = inspeccion.estado === "COMPLETADA";
+  const errorMessage =
+    state.status === "error" ? state.message : deleteState.status === "error" ? deleteState.message : null;
 
   return (
     <div className={`${panel} p-5 sm:p-6`}>
@@ -292,11 +295,33 @@ function ProgressHeader({ cotizacionId, inspeccion }: { cotizacionId: string; in
             </button>
           </form>
         )}
+
+        <form
+          action={deleteAction}
+          onSubmit={(event) => {
+            if (
+              !window.confirm(
+                "Se eliminará la inspección y todas sus fotos. Podrás volver a generarla desde el inicio. ¿Continuar?",
+              )
+            ) {
+              event.preventDefault();
+            }
+          }}
+          className="ml-auto"
+        >
+          <input type="hidden" name="cotizacionId" value={cotizacionId} />
+          <button
+            type="submit"
+            disabled={deletePending}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-red-300/30 bg-red-300/10 px-3 text-xs font-bold text-red-100 hover:bg-red-300/16 disabled:opacity-60"
+          >
+            {deletePending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+            Eliminar inspección
+          </button>
+        </form>
       </div>
 
-      {state.status === "error" && state.message && (
-        <p className="mt-3 text-xs font-semibold text-red-200">{state.message}</p>
-      )}
+      {errorMessage && <p className="mt-3 text-xs font-semibold text-red-200">{errorMessage}</p>}
     </div>
   );
 }

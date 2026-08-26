@@ -297,3 +297,51 @@ export async function deleteFoto(input: {
     conn.release();
   }
 }
+
+/**
+ * Elimina toda la inspección de una cotización: la fila `inspeccion` (que
+ * cascadea a `inspeccion_foto`) y todos sus objetos en Storage. El usuario
+ * puede volver a generarla desde el inicio (elegir carrocería de nuevo).
+ * No hace nada si la cotización no tiene inspección.
+ */
+export async function deleteInspeccion(input: {
+  cotizacionId: string;
+  actorUserId: string | null;
+}): Promise<void> {
+  const conn = await getDbPool().connect();
+  const objectPaths: string[] = [];
+  try {
+    await conn.query("begin");
+    const header = await conn.query<{ id: string }>(
+      "select id from inspeccion where cotizacion_id = $1 for update",
+      [input.cotizacionId],
+    );
+    if (header.rowCount !== 1) {
+      await conn.query("rollback");
+      return;
+    }
+    const inspeccionId = header.rows[0].id;
+
+    const fotos = await conn.query<{ storage_path: string }>(
+      "select storage_path from inspeccion_foto where inspeccion_id = $1",
+      [inspeccionId],
+    );
+    objectPaths.push(...fotos.rows.map((row) => row.storage_path));
+
+    await conn.query("delete from inspeccion where id = $1", [inspeccionId]);
+    await conn.query(
+      `insert into auditoria (entidad, entidad_id, accion, datos_nuevos, usuario_id)
+       values ('INSPECCION', $1, 'CAMBIO_ESTADO',
+               jsonb_build_object('accion', 'ELIMINACION', 'fotos', $2::int), $3)`,
+      [inspeccionId, objectPaths.length, input.actorUserId],
+    );
+    await conn.query("commit");
+  } catch (error) {
+    await conn.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    conn.release();
+  }
+
+  await removeObjects(objectPaths);
+}

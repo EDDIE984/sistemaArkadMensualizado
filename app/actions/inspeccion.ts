@@ -8,7 +8,7 @@ import {
   InspeccionAccessError,
   InspeccionNotFoundError,
 } from "@/lib/inspeccion/data";
-import { startOrUpdateInspeccion } from "@/lib/inspeccion/service";
+import { deleteInspeccion, startOrUpdateInspeccion } from "@/lib/inspeccion/service";
 import { CARROCERIAS } from "@/lib/inspeccion/slots";
 import type { InspeccionActionState } from "@/lib/inspeccion/types";
 
@@ -67,4 +67,32 @@ export async function cambiarCarroceria(
   formData: FormData,
 ): Promise<InspeccionActionState> {
   return applyCarroceria(formData);
+}
+
+/** Elimina la inspección completa (fotos + objetos) para volver a generarla desde el inicio. */
+export async function eliminarInspeccion(
+  _prev: InspeccionActionState,
+  formData: FormData,
+): Promise<InspeccionActionState> {
+  const session = await requireSession();
+  const cotizacionId = String(formData.get("cotizacionId") ?? "");
+  if (!z.string().uuid().safeParse(cotizacionId).success) {
+    return { status: "error", message: "Solicitud inválida." };
+  }
+
+  try {
+    await assertQuoteOwnership(session, cotizacionId);
+    await deleteInspeccion({
+      cotizacionId,
+      actorUserId: session.actorType === "USUARIO" ? session.actorId : null,
+    });
+  } catch (error) {
+    if (error instanceof InspeccionAccessError) return { status: "error", message: error.message };
+    if (error instanceof InspeccionNotFoundError) return { status: "error", message: error.message };
+    console.error("[inspeccion] error al eliminar la inspección", error);
+    return { status: "error", message: "No pudimos eliminar la inspección. Inténtalo de nuevo." };
+  }
+
+  revalidateAll(cotizacionId);
+  return { status: "success" };
 }
