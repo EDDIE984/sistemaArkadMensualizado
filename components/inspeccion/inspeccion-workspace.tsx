@@ -87,8 +87,8 @@ function CarroceriaPicker({ cotizacionId, vehicleLabel }: { cotizacionId: string
                 onChange={() => setCarroceria(option)}
                 className="sr-only"
               />
-              <span className="mx-auto block h-16 w-full text-cyan-100/85">
-                <CarroceriaIcon carroceria={option} className="mx-auto h-full w-auto" />
+              <span className="flex h-20 w-full items-center justify-center">
+                <CarroceriaIcon carroceria={option} className="max-h-full max-w-full object-contain" />
               </span>
               <span className="mt-2 block text-xs font-bold">{CARROCERIA_LABELS[option]}</span>
             </label>
