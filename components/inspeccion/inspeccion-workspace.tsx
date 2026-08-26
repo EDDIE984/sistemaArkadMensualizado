@@ -25,6 +25,7 @@ import {
   type SlotCode,
 } from "@/lib/inspeccion/slots";
 import { initialInspeccionState, type InspeccionFotoView, type InspeccionView } from "@/lib/inspeccion/types";
+import { CarroceriaIcon } from "@/components/inspeccion/carroceria-icons";
 import { Silhouette } from "@/components/inspeccion/silhouettes";
 
 type Props = {
@@ -86,8 +87,8 @@ function CarroceriaPicker({ cotizacionId, vehicleLabel }: { cotizacionId: string
                 onChange={() => setCarroceria(option)}
                 className="sr-only"
               />
-              <span className="mx-auto block h-16 w-full text-cyan-100/80">
-                <Silhouette slot={PREVIEW_SLOT[option]} className="mx-auto h-full" />
+              <span className="mx-auto block h-16 w-full text-cyan-100/85">
+                <CarroceriaIcon carroceria={option} className="mx-auto h-full w-auto" />
               </span>
               <span className="mt-2 block text-xs font-bold">{CARROCERIA_LABELS[option]}</span>
             </label>
@@ -106,16 +107,6 @@ function CarroceriaPicker({ cotizacionId, vehicleLabel }: { cotizacionId: string
     </form>
   );
 }
-
-const PREVIEW_SLOT: Record<Carroceria, SlotCode> = {
-  SEDAN: "LATERAL_IZQUIERDO",
-  SUV: "LATERAL_IZQUIERDO",
-  STATION_WAGON: "LATERAL_IZQUIERDO",
-  HATCHBACK: "LATERAL_IZQUIERDO",
-  LCV: "LATERAL_IZQUIERDO",
-  CAMIONETA: "LATERAL_IZQUIERDO",
-  MINIVAN: "LATERAL_IZQUIERDO",
-};
 
 /* ------------------------------------------------------------------ */
 /* Paso 2 — grilla de tomas                                            */
@@ -600,9 +591,6 @@ function CaptureModal({
               playsInline
               className={`max-h-full max-w-full rounded-xl object-contain ${mode === "camera" ? "" : "hidden"}`}
             />
-            <span className="pointer-events-none absolute inset-0 flex items-center justify-center p-10 text-white/25">
-              <Silhouette slot={slot} className="h-full w-full max-h-[60vh]" />
-            </span>
             {mode === "loading" && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <LoaderCircle className="size-6 animate-spin text-white/60" />
