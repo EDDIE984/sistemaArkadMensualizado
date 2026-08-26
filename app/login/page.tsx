@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SiteNav } from "@/components/site-nav";
 import { AuthPanel } from "@/components/auth/auth-panel";
+import { LoginBgVideo } from "@/components/auth/login-bg-video";
 import { getSession, sessionHome } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
@@ -16,17 +17,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const params = await searchParams;
   return (
     <main className="relative min-h-dvh overflow-x-hidden bg-[#0a0a0a] text-white">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden bg-[#0a0a0a] animate-[zoomFade_1.6s_ease-out_both]">
-        <video
-          src="https://res.cloudinary.com/urml6fcu/video/upload/v1786673694/kling_20260814_Image_to_Video_Animaci_nE_2609_0.mp4"
-          autoPlay
-          loop
-          muted
-          playsInline
-          aria-hidden="true"
-          className="absolute left-1/2 top-1/2 h-full min-h-full w-full min-w-full -translate-x-1/2 -translate-y-1/2 object-cover object-center"
-        />
-      </div>
+      <LoginBgVideo />
 
       <div
         className="pointer-events-none fixed inset-0 animate-[fadeIn_1.2s_ease-out_both] bg-[linear-gradient(100deg,rgba(6,6,8,0.9)_0%,rgba(6,6,8,0.73)_35%,rgba(6,6,8,0.4)_62%,rgba(6,6,8,0.3)_82%,rgba(6,6,8,0.48)_100%)]"
