@@ -152,6 +152,15 @@
   html {
     @apply font-sans;
   }
+  /* Evita el desbordamiento horizontal en toda la app (el móvil se "aleja"
+     para mostrar todo el ancho si algún hijo se pasa). `clip` no crea un
+     contenedor de scroll, así que `position: sticky` sigue funcionando.
+     Las tablas anchas mantienen su propio `overflow-x-auto` interno. */
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: clip;
+  }
 }
 
 @keyframes fadeUp {
