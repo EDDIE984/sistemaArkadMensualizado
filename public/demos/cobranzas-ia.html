@@ -1,0 +1,1135 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobranzas Asistidas por IA — demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+/* ============================ TOKENS ============================ */
+:root{
+  /* light palette — deliberate navy-tinted neutrals */
+  --ground:#eef3f9;
+  --surface:#ffffff;
+  --surface-2:#f4f7fb;
+  --raised:#e9f0f8;
+  --ink:#0c2036;
+  --muted:#4a627c;
+  --faint:#7189a2;
+  --line:rgba(12,32,54,.12);
+  --line-strong:rgba(12,32,54,.22);
+  --accent:#1f7fc4;
+  --accent-strong:#15669f;
+  --accent-ink:#ffffff;
+  --accent-wash:rgba(31,127,196,.10);
+  --ok:#12886a;      --ok-wash:rgba(18,136,106,.12);
+  --warn:#9a6412;    --warn-wash:rgba(154,100,18,.14);
+  --crit:#c0392f;    --crit-wash:rgba(192,57,47,.10);
+  --shadow:0 1px 2px rgba(12,32,54,.06), 0 12px 32px -12px rgba(12,32,54,.18);
+
+  --font-display:"Bricolage Grotesque","Trebuchet MS",sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+
+  --fs-xs:.72rem; --fs-sm:.84rem; --fs-base:.95rem; --fs-md:1.1rem;
+  --fs-lg:1.4rem; --fs-xl:2rem; --fs-2xl:2.85rem;
+
+  --r-sm:8px; --r:13px; --r-lg:18px;
+  --maxw:1120px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#071426;
+    --surface:#0e2339;
+    --surface-2:#122b44;
+    --raised:#1a3b58;
+    --ink:#e9f2fc;
+    --muted:#93abc4;
+    --faint:#6d88a4;
+    --line:rgba(255,255,255,.10);
+    --line-strong:rgba(255,255,255,.20);
+    --accent:#7cc4ff;
+    --accent-strong:#a7d8ff;
+    --accent-ink:#06131f;
+    --accent-wash:rgba(124,196,255,.14);
+    --ok:#45d3a6;   --ok-wash:rgba(69,211,166,.14);
+    --warn:#f6bb5c; --warn-wash:rgba(246,187,92,.14);
+    --crit:#ff6f6f; --crit-wash:rgba(255,111,111,.14);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 18px 40px -16px rgba(0,0,0,.55);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#071426;
+  --surface:#0e2339;
+  --surface-2:#122b44;
+  --raised:#1a3b58;
+  --ink:#e9f2fc;
+  --muted:#93abc4;
+  --faint:#6d88a4;
+  --line:rgba(255,255,255,.10);
+  --line-strong:rgba(255,255,255,.20);
+  --accent:#7cc4ff;
+  --accent-strong:#a7d8ff;
+  --accent-ink:#06131f;
+  --accent-wash:rgba(124,196,255,.14);
+  --ok:#45d3a6;   --ok-wash:rgba(69,211,166,.14);
+  --warn:#f6bb5c; --warn-wash:rgba(246,187,92,.14);
+  --crit:#ff6f6f; --crit-wash:rgba(255,111,111,.14);
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 18px 40px -16px rgba(0,0,0,.55);
+}
+
+/* ============================ BASE ============================ */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--font-body);
+  font-size:var(--fs-base);
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{font-family:var(--font-display);font-weight:600;margin:0;text-wrap:balance;line-height:1.15}
+p{margin:0}
+button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--font-mono);font-size:var(--fs-xs);letter-spacing:.18em;text-transform:uppercase;color:var(--accent-strong)}
+.muted{color:var(--muted)}
+.faint{color:var(--faint)}
+
+/* ============================ SHELL ============================ */
+.app{display:grid;grid-template-columns:252px 1fr;min-height:100vh}
+.sidebar{
+  background:var(--surface);
+  border-right:1px solid var(--line);
+  padding:22px 16px;
+  display:flex;flex-direction:column;gap:22px;
+  position:sticky;top:0;height:100vh;
+}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 6px}
+.brand-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(150deg,var(--accent),var(--accent-strong));display:grid;place-items:center;color:var(--accent-ink);font-family:var(--font-display);font-weight:800;font-size:1rem}
+.brand-name{font-family:var(--font-display);font-weight:700;letter-spacing:.02em;font-size:1.05rem}
+.demo-tag{
+  display:inline-flex;align-items:center;gap:7px;
+  font-family:var(--font-mono);font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--warn);
+  border:1px dashed var(--warn);border-radius:999px;
+  padding:5px 10px;margin:0 6px;
+}
+.demo-tag::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warn)}
+.nav{display:flex;flex-direction:column;gap:3px}
+.nav-label{font-family:var(--font-mono);font-size:var(--fs-xs);letter-spacing:.16em;text-transform:uppercase;color:var(--faint);padding:6px 10px 4px}
+.nav-item{
+  display:flex;align-items:center;gap:11px;
+  padding:10px 11px;border-radius:10px;border:0;background:transparent;
+  color:var(--muted);text-align:left;width:100%;font-weight:500;
+  transition:background .16s,color .16s;
+}
+.nav-item svg{width:18px;height:18px;flex:none;stroke-width:1.7}
+.nav-item:hover{background:var(--surface-2);color:var(--ink)}
+.nav-item[aria-current="true"]{background:var(--accent-wash);color:var(--ink);font-weight:600}
+.nav-item[aria-current="true"] svg{color:var(--accent-strong)}
+.sidebar-foot{margin-top:auto;padding:12px 10px 4px;font-size:var(--fs-xs);color:var(--faint);border-top:1px solid var(--line);line-height:1.5}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:18px 34px;border-bottom:1px solid var(--line);
+  background:var(--ground);position:sticky;top:0;z-index:5;
+}
+.topbar h1{font-size:var(--fs-lg)}
+.topbar .sub{font-size:var(--fs-sm);color:var(--muted);margin-top:2px}
+.theme-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  border:1px solid var(--line-strong);background:var(--surface);
+  padding:8px 13px;border-radius:999px;font-size:var(--fs-sm);color:var(--muted);
+}
+.theme-btn svg{width:15px;height:15px}
+.theme-btn:hover{color:var(--ink);border-color:var(--accent)}
+
+.view{padding:28px 34px 64px;max-width:var(--maxw);width:100%}
+.view[hidden]{display:none}
+.stack{display:flex;flex-direction:column;gap:22px}
+.view-intro{max-width:64ch;color:var(--muted);font-size:var(--fs-sm)}
+
+/* ============================ PRIMITIVES ============================ */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;box-shadow:var(--shadow)}
+.card-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px}
+.card-h h3{font-size:var(--fs-md)}
+
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 16px 14px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--shadow)}
+.kpi .label{font-family:var(--font-mono);font-size:var(--fs-xs);letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.kpi .val{font-family:var(--font-display);font-size:var(--fs-xl);font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.kpi .delta{font-size:var(--fs-xs);color:var(--muted)}
+.kpi .delta.up{color:var(--ok)} .kpi .delta.down{color:var(--crit)}
+
+.btn{
+  display:inline-flex;align-items:center;gap:8px;justify-content:center;
+  border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);
+  padding:9px 15px;border-radius:999px;font-weight:600;font-size:var(--fs-sm);
+  transition:transform .1s,background .16s,border-color .16s,opacity .16s;
+}
+.btn:hover{border-color:var(--accent)}
+.btn:active{transform:translateY(1px)}
+.btn--primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn--primary:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
+.btn--ghost{background:transparent}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.btn svg{width:15px;height:15px}
+
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:var(--fs-xs);font-weight:600;font-family:var(--font-mono);letter-spacing:.02em;white-space:nowrap;border:1px solid transparent}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.pill--ok{color:var(--ok);background:var(--ok-wash);border-color:color-mix(in srgb,var(--ok) 30%,transparent)}
+.pill--info{color:var(--accent-strong);background:var(--accent-wash);border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
+.pill--warn{color:var(--warn);background:var(--warn-wash);border-color:color-mix(in srgb,var(--warn) 30%,transparent)}
+.pill--crit{color:var(--crit);background:var(--crit-wash);border-color:color-mix(in srgb,var(--crit) 30%,transparent)}
+.pill--muted{color:var(--faint);background:var(--surface-2);border-color:var(--line)}
+.pill--plain::before{display:none}
+
+.chip{display:inline-flex;align-items:center;padding:3px 9px;border-radius:7px;font-size:var(--fs-xs);background:var(--surface-2);border:1px solid var(--line);color:var(--muted);font-family:var(--font-mono)}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px}
+
+/* ============================ TABLE ============================ */
+.twrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);box-shadow:var(--shadow)}
+table.grid{width:100%;border-collapse:collapse;min-width:720px}
+table.grid th{
+  text-align:left;font-family:var(--font-mono);font-size:var(--fs-xs);letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint);font-weight:500;padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap;
+}
+table.grid td{padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.grid tr:last-child td{border-bottom:0}
+table.grid tbody tr{transition:background .14s}
+table.grid tbody tr[data-row]:hover{background:var(--surface-2);cursor:pointer}
+table.grid tbody tr[aria-selected="true"]{background:var(--accent-wash)}
+td.num{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.seg-cell{border-left:3px solid transparent}
+.seg-cell[data-seg="AL_DIA"]{border-left-color:var(--ok)}
+.seg-cell[data-seg="MORA_TEMPRANA"]{border-left-color:var(--accent)}
+.seg-cell[data-seg="MORA_MEDIA"]{border-left-color:var(--warn)}
+.seg-cell[data-seg="MORA_AVANZADA"]{border-left-color:var(--crit)}
+
+.filterbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.fchip{border:1px solid var(--line-strong);background:var(--surface);color:var(--muted);padding:7px 13px;border-radius:999px;font-size:var(--fs-sm);font-weight:500}
+.fchip[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+
+/* ============================ MESSAGE COMPOSER ============================ */
+.composer{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.composer{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.field label{font-family:var(--font-mono);font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.seg-toggle{display:flex;gap:6px;flex-wrap:wrap}
+.seg-toggle button{border:1px solid var(--line-strong);background:var(--surface);color:var(--muted);padding:7px 12px;border-radius:9px;font-size:var(--fs-sm)}
+.seg-toggle button[aria-pressed="true"]{background:var(--accent-wash);border-color:var(--accent);color:var(--ink);font-weight:600}
+.msg-out{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-height:280px}
+.msg-empty{margin:auto;text-align:center;color:var(--faint);font-size:var(--fs-sm);max-width:34ch}
+.msg-empty svg{width:26px;height:26px;margin-bottom:8px;opacity:.6}
+textarea,input.tin{
+  width:100%;background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);
+  border-radius:9px;padding:10px 12px;font-family:var(--font-body);font-size:var(--fs-sm);line-height:1.55;resize:vertical;
+}
+textarea[readonly],input.tin[readonly]{background:var(--surface-2);color:var(--muted)}
+textarea:focus,input.tin:focus{outline:2px solid var(--accent);outline-offset:1px}
+.msg-meta{font-family:var(--font-mono);font-size:var(--fs-xs);color:var(--faint);display:flex;gap:10px;flex-wrap:wrap}
+.gen-typing{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:var(--fs-sm);margin:auto}
+.dots{display:inline-flex;gap:4px}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 1s infinite ease-in-out}
+.dots i:nth-child(2){animation-delay:.16s}.dots i:nth-child(3){animation-delay:.32s}
+@keyframes blink{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+.action-row{display:flex;gap:8px;flex-wrap:wrap;padding-top:4px;border-top:1px solid var(--line)}
+
+.dp-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.dp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px 18px;margin-bottom:16px}
+.dp-grid .k{font-family:var(--font-mono);font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.dp-grid .v{font-size:var(--fs-md);font-family:var(--font-display);font-weight:500;font-variant-numeric:tabular-nums}
+
+.note{font-size:var(--fs-xs);color:var(--faint);font-style:italic}
+
+/* ============================ CHAT ============================ */
+.chat-shell{max-width:420px;margin:0 auto;border:1px solid var(--line-strong);border-radius:22px;overflow:hidden;background:var(--surface-2);box-shadow:var(--shadow)}
+.chat-top{background:var(--accent);color:var(--accent-ink);padding:14px 16px;display:flex;align-items:center;gap:11px}
+.chat-top .av{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.25);display:grid;place-items:center;font-size:1rem}
+.chat-top b{font-family:var(--font-display);font-size:var(--fs-base)}
+.chat-top span{font-size:var(--fs-xs);opacity:.85}
+.chat-log{padding:16px;display:flex;flex-direction:column;gap:10px;min-height:340px;max-height:460px;overflow-y:auto}
+.bubble{max-width:82%;padding:9px 13px;border-radius:15px;font-size:var(--fs-sm);line-height:1.5;white-space:pre-wrap;animation:pop .18s ease-out}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.bubble.bot{background:var(--surface);border:1px solid var(--line);border-bottom-left-radius:5px;align-self:flex-start}
+.bubble.me{background:var(--accent);color:var(--accent-ink);border-bottom-right-radius:5px;align-self:flex-end}
+.bubble .card-in{margin-top:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px;font-family:var(--font-mono);font-size:var(--fs-xs);color:var(--ink);white-space:normal}
+.bubble .card-in b{color:var(--accent-strong)}
+.pay-link{display:inline-flex;align-items:center;gap:7px;margin-top:8px;background:var(--ok-wash);color:var(--ok);border:1px solid color-mix(in srgb,var(--ok) 35%,transparent);padding:7px 12px;border-radius:9px;font-size:var(--fs-sm);font-weight:600}
+.chat-replies{padding:12px 16px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px;background:var(--surface)}
+.qr{border:1px solid var(--accent);background:var(--accent-wash);color:var(--ink);padding:8px 13px;border-radius:999px;font-size:var(--fs-sm);font-weight:500}
+.qr:hover{background:var(--accent);color:var(--accent-ink)}
+.chat-banner{background:var(--warn-wash);color:var(--warn);font-size:var(--fs-xs);text-align:center;padding:8px 12px;font-family:var(--font-mono)}
+.typing-b{align-self:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:15px;border-bottom-left-radius:5px;padding:11px 14px}
+
+/* ============================ VOICEBOT ============================ */
+.vb-grid{display:grid;grid-template-columns:1fr 300px;gap:18px}
+@media(max-width:920px){.vb-grid{grid-template-columns:1fr}}
+.transcript{display:flex;flex-direction:column;gap:2px}
+.turn{display:grid;grid-template-columns:56px 1fr;gap:12px;padding:11px 12px;border-radius:10px;transition:background .2s}
+.turn.active{background:var(--accent-wash)}
+.turn .t{font-family:var(--font-mono);font-size:var(--fs-xs);color:var(--faint);padding-top:3px}
+.turn .who{font-family:var(--font-mono);font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px}
+.turn.bot .who{color:var(--accent-strong)}
+.turn.cliente .who{color:var(--warn)}
+.turn.sys{grid-template-columns:1fr;text-align:center}
+.turn.sys .who{color:var(--faint)}
+.turn.sys .txt{font-family:var(--font-mono);font-size:var(--fs-xs);color:var(--muted)}
+.vb-meta .row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:var(--fs-sm)}
+.vb-meta .row:last-child{border-bottom:0}
+.vb-meta .row .k{color:var(--faint);font-family:var(--font-mono);font-size:var(--fs-xs);letter-spacing:.06em;text-transform:uppercase}
+.spark{display:flex;align-items:flex-end;gap:4px;height:46px;margin-top:6px}
+.spark i{flex:1;border-radius:2px 2px 0 0;min-height:3px}
+
+/* ============================ SENTIMENT ============================ */
+.senti-head{display:flex;flex-wrap:wrap;gap:20px;align-items:center;justify-content:space-between}
+.gauge{display:flex;align-items:center;gap:14px}
+.gauge .score{font-family:var(--font-display);font-size:var(--fs-2xl);font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.gauge .score.neg{color:var(--crit)}
+.timeline{display:flex;flex-direction:column;gap:10px}
+.tl-item{display:grid;grid-template-columns:96px 1fr auto;gap:14px;padding:14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);align-items:start}
+@media(max-width:760px){.tl-item{grid-template-columns:1fr}}
+.tl-item .when{font-family:var(--font-mono);font-size:var(--fs-xs);color:var(--faint);line-height:1.5}
+.tl-item .body p{font-size:var(--fs-sm);margin-bottom:8px}
+.tl-item .dirline{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.tl-badge{text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end;min-width:120px}
+.tl-badge .sc{font-family:var(--font-mono);font-size:var(--fs-xs);color:var(--muted)}
+.reveal{filter:blur(5px);opacity:.35;transition:filter .5s,opacity .5s}
+.reveal.on{filter:none;opacity:1}
+.risk-banner{display:flex;gap:12px;align-items:flex-start;background:var(--crit-wash);border:1px solid color-mix(in srgb,var(--crit) 35%,transparent);border-radius:var(--r);padding:16px}
+.risk-banner svg{width:20px;height:20px;color:var(--crit);flex:none;margin-top:2px}
+.dist{display:flex;height:14px;border-radius:999px;overflow:hidden;border:1px solid var(--line)}
+.dist i{display:block}
+.dist-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:var(--fs-xs);color:var(--muted)}
+.dist-legend span{display:inline-flex;align-items:center;gap:6px}
+.dist-legend b::before{content:"";display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle;background:currentColor}
+
+/* ============================ DASHBOARD ============================ */
+.chart-legend{display:flex;gap:18px;flex-wrap:wrap;font-size:var(--fs-sm);color:var(--muted)}
+.chart-legend span{display:inline-flex;align-items:center;gap:7px}
+.chart-legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.proj-svg{width:100%;height:auto;display:block}
+.proj-svg .grid-l{stroke:var(--line)}
+.proj-svg .axis-t{fill:var(--faint);font-family:var(--font-mono);font-size:11px}
+.proj-svg .bar-lab{fill:var(--muted);font-family:var(--font-mono);font-size:11px;font-weight:500}
+
+/* ============================ MODAL / TOAST ============================ */
+.backdrop{position:fixed;inset:0;background:rgba(6,15,28,.55);backdrop-filter:blur(2px);display:grid;place-items:center;padding:24px;z-index:40}
+.backdrop[hidden]{display:none}
+.modal{background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r-lg);max-width:560px;width:100%;padding:24px;box-shadow:var(--shadow);max-height:85vh;overflow:auto}
+.modal h3{font-size:var(--fs-lg);margin-bottom:4px}
+#toast{
+  position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);
+  background:var(--ink);color:var(--ground);padding:11px 18px;border-radius:999px;
+  font-size:var(--fs-sm);font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:50;
+  box-shadow:var(--shadow);
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ============================ RESPONSIVE ============================ */
+@media(max-width:880px){
+  .app{grid-template-columns:1fr}
+  .sidebar{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px}
+  .nav{flex-direction:row;flex-wrap:wrap;flex:1}
+  .nav-label,.sidebar-foot{display:none}
+  .nav-item{width:auto}
+  .kpi-row{grid-template-columns:repeat(2,1fr)}
+  .topbar,.view{padding-left:18px;padding-right:18px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ==================== SIDEBAR ==================== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">C</div>
+      <div class="brand-name">CONFIA</div>
+    </div>
+    <div class="demo-tag">Demo · datos ficticios</div>
+    <nav class="nav" aria-label="Módulos de la demo">
+      <div class="nav-label">Cobranzas IA</div>
+      <button class="nav-item" data-view="cartera" aria-current="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M3 12h18M3 18h12"/></svg>
+        Cartera &amp; mensajes IA
+      </button>
+      <button class="nav-item" data-view="asistente">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Asistente del cliente
+      </button>
+      <button class="nav-item" data-view="voicebot">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 11.5a16 16 0 0 0 6 6l1-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg>
+        Voicebot de cobranza
+      </button>
+      <button class="nav-item" data-view="sentimiento">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M8 15s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>
+        Análisis de sentimiento
+      </button>
+      <button class="nav-item" data-view="tablero">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18M8 16l3-4 3 2 5-7"/></svg>
+        Tablero predictivo
+      </button>
+    </nav>
+    <div class="sidebar-foot">
+      Prototipo de presentación. Sin conexión a datos reales, sin envíos, sin persistencia. Se descarta tras la revisión con el cliente.
+    </div>
+  </aside>
+
+  <!-- ==================== MAIN ==================== -->
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <h1 id="tb-title">Cartera &amp; mensajes IA</h1>
+        <div class="sub" id="tb-sub">Segmentación de mora y redacción asistida de recordatorios</div>
+      </div>
+      <button class="theme-btn" id="themeBtn" aria-label="Cambiar tema">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>
+        <span id="themeLabel">Tema</span>
+      </button>
+    </header>
+
+    <!-- ============ VIEW 1 · CARTERA + MENSAJES ============ -->
+    <section class="view" id="view-cartera">
+      <div class="stack">
+        <p class="view-intro">La IA clasifica cada póliza por antigüedad de mora e historial de pago, sugiere un tono, y redacta el recordatorio para el canal elegido. Ningún mensaje sale sin que una persona lo apruebe.</p>
+
+        <div class="kpi-row">
+          <div class="kpi"><span class="label">Monto vencido</span><span class="val">$84 620</span><span class="delta down">▲ 6,1% vs. mes anterior</span></div>
+          <div class="kpi"><span class="label">Pólizas en mora</span><span class="val">128</span><span class="delta">de 540 activas</span></div>
+          <div class="kpi"><span class="label">Riesgo alto</span><span class="val">23</span><span class="delta down">mora avanzada + sentimiento</span></div>
+          <div class="kpi"><span class="label">Borradores por revisar</span><span class="val">7</span><span class="delta">generados por IA hoy</span></div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <h3>Cartera por segmento</h3>
+            <div class="filterbar" id="segFilter">
+              <button class="fchip" data-seg="all" aria-pressed="true">Todos</button>
+              <button class="fchip" data-seg="AL_DIA" aria-pressed="false">Al día</button>
+              <button class="fchip" data-seg="MORA_TEMPRANA" aria-pressed="false">Mora temprana</button>
+              <button class="fchip" data-seg="MORA_MEDIA" aria-pressed="false">Mora media</button>
+              <button class="fchip" data-seg="MORA_AVANZADA" aria-pressed="false">Mora avanzada</button>
+            </div>
+          </div>
+          <div class="twrap">
+            <table class="grid" id="carteraTable">
+              <thead><tr><th>Póliza</th><th>Cliente</th><th>Producto</th><th>Segmento</th><th class="num">Días mora</th><th class="num">Monto vencido</th><th>Gestión</th></tr></thead>
+              <tbody><!-- filled by JS --></tbody>
+            </table>
+          </div>
+          <p class="note" style="margin-top:10px">Haz clic en una fila para abrir la gestión y generar el mensaje.</p>
+        </div>
+
+        <div class="card" id="detailPanel">
+          <div class="dp-head">
+            <div>
+              <div class="eyebrow">Gestión de póliza</div>
+              <h3 id="dp-poliza" class="mono">POL-2024-04417</h3>
+            </div>
+            <span id="dp-status" class="pill pill--muted">Sin gestión</span>
+          </div>
+
+          <div class="dp-grid">
+            <div><div class="k">Cliente</div><div class="v" id="dp-cliente">María Fernanda Loor</div></div>
+            <div><div class="k">Segmento</div><div class="v"><span id="dp-seg" class="pill pill--info">Mora temprana</span></div></div>
+            <div><div class="k">Cuotas vencidas</div><div class="v" id="dp-cuotas">1</div></div>
+            <div><div class="k">Monto adeudado</div><div class="v" id="dp-monto">$148.60</div></div>
+            <div><div class="k">Días de mora</div><div class="v" id="dp-dias">12</div></div>
+            <div><div class="k">Historial de pago</div><div class="v" id="dp-hist">9 a tiempo · 1 tardío</div></div>
+            <div><div class="k">Próxima cuota</div><div class="v" id="dp-prox">15 sep</div></div>
+          </div>
+
+          <div class="composer">
+            <div>
+              <div class="field">
+                <label>Canal</label>
+                <div class="seg-toggle" id="canalToggle">
+                  <button data-v="email" aria-pressed="true">Email</button>
+                  <button data-v="whatsapp" aria-pressed="false">WhatsApp</button>
+                  <button data-v="sms" aria-pressed="false">SMS</button>
+                </div>
+              </div>
+              <div class="field">
+                <label>Tono <span class="faint" style="text-transform:none;letter-spacing:0">— sugerido por IA</span></label>
+                <div class="seg-toggle" id="tonoToggle">
+                  <button data-v="AMIGABLE" aria-pressed="false">Amigable</button>
+                  <button data-v="RECORDATORIO" aria-pressed="true">Recordatorio</button>
+                  <button data-v="FORMAL" aria-pressed="false">Formal</button>
+                  <button data-v="URGENTE" aria-pressed="false">Urgente</button>
+                </div>
+              </div>
+              <button class="btn btn--primary" id="genBtn" style="margin-top:4px">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
+                Generar con IA
+              </button>
+              <p class="note" style="margin-top:10px">La IA usa solo los datos de la póliza mostrados arriba. Ajusta canal y tono y vuelve a generar cuantas veces quieras.</p>
+            </div>
+
+            <div class="msg-out" id="msgOut">
+              <div class="msg-empty" id="msgEmpty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v12H7l-3 3z"/></svg>
+                Configura canal y tono, luego pulsa <b>Generar con IA</b> para ver el borrador.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ VIEW 2 · ASISTENTE DEL CLIENTE ============ -->
+    <section class="view" id="view-asistente" hidden>
+      <div class="stack">
+        <p class="view-intro">El cliente resuelve su cobranza sin llamar a nadie: consulta su saldo, arma un plan de pago y paga desde el chat. Guion de demostración — nada se cobra ni se guarda.</p>
+        <div class="chat-shell">
+          <div class="chat-top">
+            <div class="av">🤖</div>
+            <div><b>CONFIA · Asistente</b><br><span>Responde al instante</span></div>
+          </div>
+          <div class="chat-log" id="chatLog"></div>
+          <div class="chat-replies" id="chatReplies"></div>
+          <div class="chat-banner">Demo — el pago y el plan de pago no se procesan.</div>
+        </div>
+        <button class="btn btn--ghost" id="chatReset" style="align-self:center">Reiniciar conversación</button>
+      </div>
+    </section>
+
+    <!-- ============ VIEW 3 · VOICEBOT ============ -->
+    <section class="view" id="view-voicebot" hidden>
+      <div class="stack">
+        <p class="view-intro">Llamada de cobranza de primer nivel: el voicebot recuerda la deuda, concilia un pago parcial, registra una promesa de pago y escala a un agente humano cuando detecta molestia. Transcripción simulada.</p>
+        <div class="vb-grid">
+          <div class="card">
+            <div class="card-h">
+              <h3>Transcripción de la llamada</h3>
+              <button class="btn btn--ghost" id="vbPlay">
+                <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>
+                Reproducir
+              </button>
+            </div>
+            <div class="transcript" id="transcript"></div>
+          </div>
+          <div>
+            <div class="card vb-meta">
+              <div class="card-h"><h3>Resultado</h3></div>
+              <div class="row"><span class="k">Duración</span><span class="mono">1 min 12 s</span></div>
+              <div class="row"><span class="k">Resultado</span><span class="pill pill--ok pill--plain">Promesa de pago</span></div>
+              <div class="row"><span class="k">Monto comprometido</span><span class="mono">$312.40</span></div>
+              <div class="row"><span class="k">Fecha comprometida</span><span class="mono">vie 29 ago 2026</span></div>
+              <div class="row"><span class="k">Sentimiento</span><span class="pill pill--warn pill--plain">Negativo · −0.4</span></div>
+              <div class="row"><span class="k">Derivada a agente</span><span class="pill pill--crit pill--plain">Sí · percepción de acoso</span></div>
+              <div class="row"><span class="k">Próxima acción</span><span class="mono" style="text-align:right">Seguimiento humano<br>antes del 28 ago</span></div>
+            </div>
+            <div class="card" style="margin-top:14px">
+              <div class="eyebrow">Sentimiento durante la llamada</div>
+              <div class="spark" id="vbSpark"></div>
+              <p class="note" style="margin-top:8px">Cada barra = una intervención del cliente.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ VIEW 4 · SENTIMIENTO ============ -->
+    <section class="view" id="view-sentimiento" hidden>
+      <div class="stack">
+        <p class="view-intro">La IA lee cada interacción con el cliente y detecta señales de riesgo: molestia por la frecuencia de contacto, amenazas de cancelación, promesas incumplidas. El equipo ve la cartera en riesgo antes de que se convierta en una queja formal.</p>
+
+        <div class="card">
+          <div class="senti-head">
+            <div>
+              <div class="eyebrow">Póliza analizada</div>
+              <h3 class="mono">POL-2022-09310 · Luis Alberto Peña</h3>
+              <p class="muted" style="font-size:var(--fs-sm)">Mora avanzada · 95 días · 6 interacciones en 15 días</p>
+            </div>
+            <div class="gauge">
+              <div>
+                <div class="score neg">−0.52</div>
+                <div class="faint mono" style="font-size:var(--fs-xs)">sentimiento medio · tendencia ↓</div>
+              </div>
+              <span class="pill pill--crit">Riesgo de cancelación ALTO</span>
+            </div>
+          </div>
+          <div style="margin-top:14px">
+            <button class="btn btn--primary" id="analyzeBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3"/></svg>
+              Analizar interacciones con IA
+            </button>
+          </div>
+        </div>
+
+        <div class="timeline" id="sentiTimeline"></div>
+
+        <div class="risk-banner reveal" id="riskBanner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+          <div>
+            <b>Riesgo de cancelación: ALTO.</b>
+            <p class="muted" style="font-size:var(--fs-sm);margin-top:4px">Recomendación de la IA: pausar la automatización de mensajes para esta póliza, asignar un gestor humano y ofrecer un plan de pago con condonación de recargos. Contacto máximo: 1 vez cada 5 días.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h3>Distribución de sentimiento</h3></div>
+          <div class="dist" id="sentiDist"></div>
+          <div class="dist-legend">
+            <span><b style="color:var(--ok)">Positivo 0</b></span>
+            <span><b style="color:var(--faint)">Neutro 3</b></span>
+            <span><b style="color:var(--warn)">Negativo 2</b></span>
+            <span><b style="color:var(--crit)">Muy negativo 1</b></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ VIEW 5 · TABLERO ============ -->
+    <section class="view" id="view-tablero" hidden>
+      <div class="stack">
+        <p class="view-intro">No solo la mora de hoy: la proyección estima cómo evoluciona la cartera vencida a 30, 60 y 90 días, y contrasta el escenario sin gestión contra el de gestión asistida por IA.</p>
+
+        <div class="kpi-row">
+          <div class="kpi"><span class="label">Cartera total</span><span class="val">$2.15 M</span><span class="delta">540 pólizas activas</span></div>
+          <div class="kpi"><span class="label">Monto vencido</span><span class="val">$84 620</span><span class="delta down">3,9% de la cartera</span></div>
+          <div class="kpi"><span class="label">Recuperación 30 d</span><span class="val">61%</span><span class="delta up">▲ 8 pts vs. mes anterior</span></div>
+          <div class="kpi"><span class="label">Pólizas en riesgo</span><span class="val">23</span><span class="delta down">alerta temprana activa</span></div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <h3>Proyección de cartera vencida</h3>
+            <label style="display:inline-flex;align-items:center;gap:8px;font-size:var(--fs-sm);color:var(--muted)">
+              <input type="checkbox" id="iaToggle" checked> Mostrar escenario con gestión IA
+            </label>
+          </div>
+          <div class="chart-legend" style="margin-bottom:10px">
+            <span><i style="background:var(--crit)"></i> Sin gestión</span>
+            <span><i style="background:var(--accent)"></i> Con gestión IA</span>
+          </div>
+          <div id="projChart"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <h3>Alertas tempranas de cartera en riesgo</h3>
+            <button class="btn btn--ghost" id="reportBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+              Descargar reporte
+            </button>
+          </div>
+          <div class="twrap">
+            <table class="grid">
+              <thead><tr><th>Póliza</th><th>Cliente</th><th class="num">Monto vencido</th><th class="num">Días mora</th><th>Motivo de alerta</th></tr></thead>
+              <tbody id="alertBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="backdrop" id="reportModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rmTitle">
+    <div class="eyebrow">Demostración</div>
+    <h3 id="rmTitle">Reporte de cartera — agosto 2026</h3>
+    <p class="muted" style="font-size:var(--fs-sm);margin-bottom:14px">Resumen por segmento con recuperación esperada bajo gestión asistida por IA.</p>
+    <div class="twrap" style="box-shadow:none">
+      <table class="grid" style="min-width:0">
+        <thead><tr><th>Segmento</th><th class="num">Pólizas</th><th class="num">Monto vencido</th><th class="num">Recup. esperada</th></tr></thead>
+        <tbody>
+          <tr><td>Al día</td><td class="num">412</td><td class="num">$0</td><td class="num">—</td></tr>
+          <tr><td>Mora temprana</td><td class="num">68</td><td class="num">$9 240</td><td class="num">88%</td></tr>
+          <tr><td>Mora media</td><td class="num">39</td><td class="num">$21 180</td><td class="num">63%</td></tr>
+          <tr><td>Mora avanzada</td><td class="num">21</td><td class="num">$54 200</td><td class="num">34%</td></tr>
+          <tr><td><b>Total</b></td><td class="num"><b>540</b></td><td class="num"><b>$84 620</b></td><td class="num"><b>58%</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note" style="margin:14px 0 16px">Generado por el módulo de Cobranzas IA · datos ficticios · no se descarga ningún archivo en la demo.</p>
+    <button class="btn btn--primary" id="rmClose">Cerrar</button>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  "use strict";
+  var RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var wait = function(ms){ return new Promise(function(r){ setTimeout(r, RM ? 0 : ms); }); };
+  var $ = function(s,c){ return (c||document).querySelector(s); };
+  var $$ = function(s,c){ return Array.prototype.slice.call((c||document).querySelectorAll(s)); };
+  function money(n){ return "$" + n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function toast(msg){
+    var t=$("#toast"); t.textContent=msg; t.classList.add("show");
+    clearTimeout(t._h); t._h=setTimeout(function(){ t.classList.remove("show"); }, 2600);
+  }
+
+  /* ---------- THEME ---------- */
+  var themeBtn=$("#themeBtn"), themeLabel=$("#themeLabel");
+  function currentTheme(){
+    var ex=document.documentElement.getAttribute("data-theme");
+    if(ex) return ex;
+    return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark":"light";
+  }
+  try{ var saved=localStorage.getItem("confia-demo-theme"); if(saved) document.documentElement.setAttribute("data-theme",saved); }catch(e){}
+  function syncThemeLabel(){ themeLabel.textContent = currentTheme()==="dark" ? "Oscuro" : "Claro"; }
+  syncThemeLabel();
+  themeBtn.addEventListener("click",function(){
+    var next = currentTheme()==="dark" ? "light":"dark";
+    document.documentElement.setAttribute("data-theme",next);
+    try{ localStorage.setItem("confia-demo-theme",next); }catch(e){}
+    syncThemeLabel();
+  });
+
+  /* ---------- NAV ---------- */
+  var titles={
+    cartera:["Cartera & mensajes IA","Segmentación de mora y redacción asistida de recordatorios"],
+    asistente:["Asistente del cliente","Autogestión de saldo, plan de pago y pago desde el chat"],
+    voicebot:["Voicebot de cobranza","Llamada de primer nivel con escalamiento a agente humano"],
+    sentimiento:["Análisis de sentimiento","Detección temprana de cartera en riesgo de queja o cancelación"],
+    tablero:["Tablero predictivo","Proyección de cartera vencida a 30 / 60 / 90 días"]
+  };
+  $$(".nav-item").forEach(function(btn){
+    btn.addEventListener("click",function(){
+      var v=btn.dataset.view;
+      $$(".nav-item").forEach(function(b){ b.setAttribute("aria-current", b===btn ? "true":"false"); });
+      $$(".view").forEach(function(sec){ sec.hidden = sec.id!=="view-"+v; });
+      $("#tb-title").textContent=titles[v][0];
+      $("#tb-sub").textContent=titles[v][1];
+      window.scrollTo(0,0);
+      if(v==="voicebot") ensureVoicebot();
+      if(v==="tablero") drawChart();
+    });
+  });
+
+  /* ================= VIEW 1 · CARTERA ================= */
+  var SEG={
+    AL_DIA:{label:"Al día",cls:"pill--ok",tono:"AMIGABLE"},
+    MORA_TEMPRANA:{label:"Mora temprana",cls:"pill--info",tono:"RECORDATORIO"},
+    MORA_MEDIA:{label:"Mora media",cls:"pill--warn",tono:"FORMAL"},
+    MORA_AVANZADA:{label:"Mora avanzada",cls:"pill--crit",tono:"URGENTE"}
+  };
+  var GEST={ "sin":{t:"Sin gestión",c:"pill--muted"}, "bor":{t:"Borrador",c:"pill--info"}, "eng":{t:"En gestión",c:"pill--warn"}, "esc":{t:"Escalado",c:"pill--crit"}, "na":{t:"—",c:"pill--muted"} };
+  var ROWS=[
+    {pol:"POL-2024-04417",cli:"María Fernanda Loor",pnom:"María Fernanda",prod:"Auto Individual",seg:"MORA_TEMPRANA",dias:12,monto:148.60,cuotas:1,hist:"9 a tiempo · 1 tardío",prox:"15 sep",gest:"sin"},
+    {pol:"POL-2023-11902",cli:"Jorge Andrade Vera",pnom:"Jorge",prod:"Auto Individual",seg:"MORA_MEDIA",dias:34,monto:312.40,cuotas:2,hist:"6 a tiempo · 3 tardíos",prox:"02 sep",gest:"bor"},
+    {pol:"POL-2024-00785",cli:"Comercial Nogales S.A.",pnom:"Comercial Nogales",prod:"Flota Liviana",seg:"MORA_AVANZADA",dias:78,monto:1204.00,cuotas:3,hist:"11 a tiempo · 4 tardíos",prox:"20 ago",gest:"eng"},
+    {pol:"POL-2024-06621",cli:"Diana Cedeño Rivas",pnom:"Diana",prod:"Auto Individual",seg:"AL_DIA",dias:0,monto:0,cuotas:0,hist:"14 a tiempo · 0 tardíos",prox:"18 sep",gest:"na"},
+    {pol:"POL-2022-09310",cli:"Luis Alberto Peña",pnom:"Luis",prod:"Auto Individual",seg:"MORA_AVANZADA",dias:95,monto:906.75,cuotas:4,hist:"5 a tiempo · 6 tardíos",prox:"10 ago",gest:"esc"},
+    {pol:"POL-2024-03344",cli:"Paola Zambrano Mite",pnom:"Paola",prod:"Moto",seg:"MORA_TEMPRANA",dias:8,monto:54.20,cuotas:1,hist:"4 a tiempo · 0 tardíos",prox:"22 sep",gest:"sin"},
+    {pol:"POL-2023-07788",cli:"Kevin Villacís Mora",pnom:"Kevin",prod:"Auto Individual",seg:"MORA_MEDIA",dias:27,monto:268.90,cuotas:2,hist:"8 a tiempo · 2 tardíos",prox:"05 sep",gest:"bor"},
+    {pol:"POL-2024-05012",cli:"Rosa Intriago León",pnom:"Rosa",prod:"Auto Individual",seg:"AL_DIA",dias:0,monto:0,cuotas:0,hist:"10 a tiempo · 0 tardíos",prox:"19 sep",gest:"na"}
+  ];
+
+  var tbody=$("#carteraTable tbody");
+  ROWS.forEach(function(r,i){
+    var tr=document.createElement("tr");
+    tr.setAttribute("data-row",i); tr.setAttribute("data-seg",r.seg);
+    var g=GEST[r.gest];
+    tr.innerHTML=
+      '<td class="mono">'+r.pol+'</td>'+
+      '<td>'+r.cli+'</td>'+
+      '<td class="muted">'+r.prod+'</td>'+
+      '<td class="seg-cell" data-seg="'+r.seg+'"><span class="pill '+SEG[r.seg].cls+'">'+SEG[r.seg].label+'</span></td>'+
+      '<td class="num">'+r.dias+'</td>'+
+      '<td class="num">'+(r.monto?money(r.monto):"—")+'</td>'+
+      '<td><span class="pill '+g.c+' pill--plain">'+g.t+'</span></td>';
+    tr.addEventListener("click",function(){ selectRow(i); });
+    tbody.appendChild(tr);
+  });
+
+  $("#segFilter").addEventListener("click",function(e){
+    var b=e.target.closest(".fchip"); if(!b) return;
+    $$(".fchip",this).forEach(function(x){ x.setAttribute("aria-pressed", x===b ? "true":"false"); });
+    var seg=b.dataset.seg;
+    $$("#carteraTable tbody tr").forEach(function(tr){
+      tr.style.display = (seg==="all"||tr.dataset.seg===seg) ? "" : "none";
+    });
+  });
+
+  var canal="email", tono="RECORDATORIO", curRow=ROWS[0], generated=false;
+
+  function selectRow(i){
+    curRow=ROWS[i]; generated=false;
+    $$("#carteraTable tbody tr").forEach(function(tr){ tr.setAttribute("aria-selected", tr.dataset.row==String(i) ? "true":"false"); });
+    $("#dp-poliza").textContent=curRow.pol;
+    $("#dp-cliente").textContent=curRow.cli;
+    var s=SEG[curRow.seg];
+    var segEl=$("#dp-seg"); segEl.className="pill "+s.cls; segEl.textContent=s.label;
+    $("#dp-cuotas").textContent=curRow.cuotas||"0";
+    $("#dp-monto").textContent=curRow.monto?money(curRow.monto):"$0.00";
+    $("#dp-dias").textContent=curRow.dias;
+    $("#dp-hist").textContent=curRow.hist;
+    $("#dp-prox").textContent=curRow.prox;
+    var g=GEST[curRow.gest]; var st=$("#dp-status"); st.className="pill "+g.c; st.textContent=g.t;
+    // reset tono to suggested
+    tono=s.tono;
+    $$("#tonoToggle button").forEach(function(b){ b.setAttribute("aria-pressed", b.dataset.v===tono ? "true":"false"); });
+    resetMsg();
+    $("#detailPanel").scrollIntoView({behavior: RM ? "auto":"smooth", block:"start"});
+  }
+  function resetMsg(){
+    $("#msgOut").innerHTML='<div class="msg-empty" id="msgEmpty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v12H7l-3 3z"/></svg>Configura canal y tono, luego pulsa <b>Generar con IA</b> para ver el borrador.</div>';
+  }
+
+  $("#canalToggle").addEventListener("click",function(e){
+    var b=e.target.closest("button"); if(!b) return;
+    $$("button",this).forEach(function(x){ x.setAttribute("aria-pressed", x===b ? "true":"false"); });
+    canal=b.dataset.v; if(generated) doGenerate(true);
+  });
+  $("#tonoToggle").addEventListener("click",function(e){
+    var b=e.target.closest("button"); if(!b) return;
+    $$("button",this).forEach(function(x){ x.setAttribute("aria-pressed", x===b ? "true":"false"); });
+    tono=b.dataset.v; if(generated) doGenerate(true);
+  });
+
+  var LIMITE = new Date(2026,7,26); LIMITE.setDate(LIMITE.getDate()+6);
+  var fechaLimite = LIMITE.toLocaleDateString("es-EC",{day:"2-digit",month:"long",year:"numeric"});
+
+  var TPL={
+    AMIGABLE:{
+      email:{a:"Un recordatorio amable sobre tu póliza {pol}",
+        b:"Hola {pnom}:\n\nEsperamos que estés muy bien. Te escribimos solo para recordarte que tu cuota de {monto} está por vencer. Si ya realizaste el pago, ¡gracias! Puedes ignorar este mensaje.\n\nSi necesitas ayuda o quieres revisar opciones de pago, respóndenos a este correo y con gusto te acompañamos.\n\nUn saludo,\nEquipo CONFIA"},
+      whatsapp:{b:"Hola {pnom} 👋 Te recordamos que tu cuota de {monto} de la póliza {pol} vence pronto. Si ya pagaste, ¡gracias! Cualquier duda escríbenos por aquí. — CONFIA"},
+      sms:{b:"CONFIA: Hola {pnom}, recordatorio: cuota de {monto} de tu poliza {pol} por vencer. Si ya pagaste, ignora este mensaje."}
+    },
+    RECORDATORIO:{
+      email:{a:"Tu cuota de la póliza {pol} está pendiente",
+        b:"Hola {pnom}:\n\nNotamos que la cuota de {monto} de tu póliza {pol} lleva {dias} días pendiente. Para mantener tu cobertura activa sin interrupciones, te pedimos regularizarla en los próximos días.\n\nPuedes pagar desde tu portal CONFIA o responder a este correo si necesitas un plan de pago.\n\nGracias,\nEquipo de Cobranzas · CONFIA"},
+      whatsapp:{b:"Hola {pnom}, tu cuota de {monto} (póliza {pol}) lleva {dias} días pendiente. Para no perder tu cobertura, regularízala esta semana. ¿Necesitas un plan de pago? Respóndenos. — CONFIA"},
+      sms:{b:"CONFIA: {pnom}, tu cuota de {monto} lleva {dias} dias pendiente. Regularizala para mantener tu cobertura. Info: confia.ec/pago"}
+    },
+    FORMAL:{
+      email:{a:"Aviso de cuota vencida — póliza {pol}",
+        b:"Estimado/a {cli}:\n\nLe informamos que su póliza {pol} mantiene {cuotas} cuotas vencidas por un total de {monto}, con una antigüedad de {dias} días. La falta de pago puede derivar en la suspensión de la cobertura conforme a las condiciones contratadas.\n\nLe solicitamos regularizar su situación antes del {limite}. Si desea acordar un plan de pagos, comuníquese con nuestro equipo de Cobranzas.\n\nAtentamente,\nDepartamento de Cobranzas · CONFIA"},
+      whatsapp:{b:"Sr./Sra. {cli}: su póliza {pol} tiene {cuotas} cuotas vencidas ({monto}, {dias} días). Le pedimos regularizar antes del {limite} para evitar la suspensión. Plan de pagos disponible. — Cobranzas CONFIA"},
+      sms:{b:"CONFIA Cobranzas: poliza {pol}, {cuotas} cuotas vencidas ({monto}). Regularice antes del {limite} para evitar suspension."}
+    },
+    URGENTE:{
+      email:{a:"Última gestión antes de la suspensión — póliza {pol}",
+        b:"Estimado/a {cli}:\n\nSu póliza {pol} registra {cuotas} cuotas vencidas por {monto} y {dias} días de mora. Este es un aviso final: de no recibir el pago o un acuerdo formal antes del {limite}, se procederá con la suspensión de la cobertura y la derivación del caso a gestión de recuperación.\n\nContáctenos hoy mismo para regularizar o acordar un plan de pagos.\n\nDepartamento de Cobranzas · CONFIA"},
+      whatsapp:{b:"{cli}: aviso final. Póliza {pol} con {monto} en mora ({dias} días). Sin pago o acuerdo antes del {limite} se suspende la cobertura. Contáctenos hoy. — Cobranzas CONFIA"},
+      sms:{b:"CONFIA: AVISO FINAL poliza {pol}. {monto} en mora {dias} dias. Sin pago antes del {limite} se suspende cobertura. Llame 1700-CONFIA."}
+    }
+  };
+  function fill(str){
+    return str
+      .replace(/{pol}/g,curRow.pol)
+      .replace(/{pnom}/g,curRow.pnom)
+      .replace(/{cli}/g,curRow.cli)
+      .replace(/{monto}/g,money(curRow.monto||0))
+      .replace(/{dias}/g,curRow.dias)
+      .replace(/{cuotas}/g,curRow.cuotas||1)
+      .replace(/{limite}/g,fechaLimite);
+  }
+  var TONO_LAB={AMIGABLE:"Amigable",RECORDATORIO:"Recordatorio",FORMAL:"Formal",URGENTE:"Urgente"};
+  var CANAL_LAB={email:"Email",whatsapp:"WhatsApp",sms:"SMS"};
+
+  $("#genBtn").addEventListener("click",function(){ doGenerate(false); });
+
+  function doGenerate(silent){
+    var out=$("#msgOut");
+    var t=TPL[tono][canal];
+    var st=$("#dp-status"); st.className="pill pill--info"; st.textContent="Borrador IA";
+    if(!silent){
+      out.innerHTML='<div class="gen-typing">La IA está redactando el borrador <span class="dots"><i></i><i></i><i></i></span></div>';
+    }
+    wait(silent?0:1100).then(function(){
+      var asuntoField = (canal==="email")
+        ? '<div class="field"><label>Asunto</label><input class="tin" id="fAsunto" readonly value="'+fill(t.a).replace(/"/g,"&quot;")+'"></div>'
+        : '';
+      out.innerHTML =
+        asuntoField +
+        '<div class="field" style="flex:1"><label>Mensaje · '+CANAL_LAB[canal]+'</label>'+
+        '<textarea id="fCuerpo" rows="'+(canal==="sms"?4:10)+'" readonly>'+fill(t.b)+'</textarea></div>'+
+        '<div class="msg-meta"><span>◆ Generado por IA</span><span>modelo: cobranzas-demo</span><span>tono: '+TONO_LAB[tono]+'</span><span>canal: '+CANAL_LAB[canal]+'</span><span>hace un momento</span></div>'+
+        '<div class="action-row">'+
+          '<button class="btn" id="editBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Editar</button>'+
+          '<button class="btn" id="apprBtn">Aprobar</button>'+
+          '<button class="btn btn--primary" id="sendBtn" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg>Enviar</button>'+
+        '</div>'+
+        '<p class="note">Borrador generado por IA — requiere aprobación de una persona antes de enviarse. En la demo no se envía nada.</p>';
+      generated=true;
+      wireMsgActions();
+    });
+  }
+  function wireMsgActions(){
+    var editBtn=$("#editBtn"), apprBtn=$("#apprBtn"), sendBtn=$("#sendBtn");
+    var editing=false;
+    editBtn.addEventListener("click",function(){
+      editing=!editing;
+      $$("#msgOut textarea, #msgOut input.tin").forEach(function(el){ el.readOnly=!editing; });
+      editBtn.innerHTML = editing
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>Guardar cambios'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Editar';
+      if(editing) $("#fCuerpo").focus();
+      else toast("Cambios guardados en el borrador");
+    });
+    apprBtn.addEventListener("click",function(){
+      var st=$("#dp-status"); st.className="pill pill--ok"; st.textContent="Aprobado";
+      apprBtn.disabled=true; sendBtn.disabled=false;
+      toast("Borrador aprobado por revisor");
+    });
+    sendBtn.addEventListener("click",function(){
+      var st=$("#dp-status"); st.className="pill pill--ok"; st.textContent="Enviado";
+      sendBtn.disabled=true; editBtn.disabled=true;
+      toast("Mensaje "+CANAL_LAB[canal]+" enviado (demo)");
+    });
+  }
+  selectRow(0);
+
+  /* ================= VIEW 2 · CHATBOT ================= */
+  var chatLog=$("#chatLog"), chatReplies=$("#chatReplies");
+  function bubble(who, html){
+    var d=document.createElement("div");
+    d.className="bubble "+(who==="me"?"me":"bot");
+    d.innerHTML=html;
+    chatLog.appendChild(d);
+    chatLog.scrollTop=chatLog.scrollHeight;
+  }
+  function setReplies(list){
+    chatReplies.innerHTML="";
+    list.forEach(function(r){
+      var b=document.createElement("button");
+      b.className="qr"; b.textContent=r.label;
+      b.addEventListener("click",function(){ handleReply(r); });
+      chatReplies.appendChild(b);
+    });
+  }
+  function typing(){
+    var d=document.createElement("div");
+    d.className="typing-b"; d.id="typingB";
+    d.innerHTML='<span class="dots"><i></i><i></i><i></i></span>';
+    chatLog.appendChild(d); chatLog.scrollTop=chatLog.scrollHeight;
+  }
+  function untyping(){ var t=$("#typingB"); if(t) t.remove(); }
+  function botSay(html, replies){
+    setReplies([]); typing();
+    wait(700).then(function(){
+      untyping(); bubble("bot",html);
+      if(replies) setReplies(replies);
+    });
+  }
+
+  var SALDO_CARD='<div class="card-in"><b>Póliza POL-2024-04417</b> · Auto Individual<br>Próxima cuota: <b>$148.60</b> — vence 15 sep 2026<br>Cuotas vencidas: <b>1</b> ($148.60)<br>Saldo del año: $1,634.60</div>';
+  function handleReply(r){
+    bubble("me", r.label);
+    if(r.id==="saldo"){
+      botSay("Aquí está tu resumen 👇"+SALDO_CARD+"<br>Tienes <b>1 cuota vencida</b>. ¿Quieres pagarla ahora o prefieres un plan de pago?",
+        [{id:"pagar_todo",label:"Pagar ahora"},{id:"plan",label:"Quiero un plan de pago"}]);
+    } else if(r.id==="plan"){
+      botSay("Puedo dividir tu saldo vencido de <b>$148.60</b> en cuotas sin interés:"+
+        '<div class="card-in"><b>Plan A</b> — 3 cuotas de $49.53 / mes<br><b>Plan B</b> — 6 cuotas de $24.77 / mes</div>',
+        [{id:"planA",label:"Elegir Plan A (3 cuotas)"},{id:"planB",label:"Elegir Plan B (6 cuotas)"}]);
+    } else if(r.id==="planA"||r.id==="planB"){
+      var n = r.id==="planA"?"3":"6"; var v = r.id==="planA"?"$49.53":"$24.77";
+      botSay("Listo ✅ Plan de <b>"+n+" cuotas</b> creado. La primera cuota de <b>"+v+"</b> vence el 29 ago 2026."+
+        '<a class="pay-link">🔒 Pagar primera cuota — '+v+'</a><br><span class="note">Enlace de demostración</span>',
+        [{id:"pay_done",label:"Ya pagué la primera cuota"},{id:"asesor",label:"Hablar con un asesor"}]);
+    } else if(r.id==="pagar_todo"){
+      botSay("Perfecto. Genero tu enlace de pago seguro por <b>$148.60</b>:"+
+        '<a class="pay-link">🔒 Pagar $148.60</a><br><span class="note">Enlace de demostración</span>',
+        [{id:"pay_done",label:"Ya pagué"},{id:"asesor",label:"Hablar con un asesor"}]);
+    } else if(r.id==="pay_done"){
+      botSay("¡Pago simulado recibido! ✔ <span class=\"note\">(demo)</span><br>Te enviamos el comprobante por correo. ¿Algo más en lo que pueda ayudarte?",
+        [{id:"nada",label:"No, gracias"},{id:"asesor",label:"Hablar con un asesor"}]);
+    } else if(r.id==="asesor"){
+      botSay("Te comunico con un asesor humano 👩‍💼 Tiempo de espera aproximado: 2 minutos. Tu caso y este chat quedan adjuntos para que no tengas que repetir nada.", null);
+    } else if(r.id==="nada"){
+      botSay("¡Gracias por usar el asistente de CONFIA! Que tengas un buen día. 🚗", null);
+    }
+  }
+  function startChat(){
+    chatLog.innerHTML="";
+    bubble("bot","¡Hola! Soy el asistente de CONFIA 🤖 Puedo ayudarte con tu póliza de auto. ¿Qué necesitas?");
+    setReplies([
+      {id:"saldo",label:"Ver mi saldo"},
+      {id:"plan",label:"Pedir un plan de pago"},
+      {id:"asesor",label:"Hablar con un asesor"}
+    ]);
+  }
+  $("#chatReset").addEventListener("click",startChat);
+  startChat();
+
+  /* ================= VIEW 3 · VOICEBOT ================= */
+  var TURNS=[
+    {w:"bot",t:"00:03",x:"Buenas tardes, le llama el asistente virtual de CONFIA Seguros. ¿Hablo con el Sr. Jorge Andrade?"},
+    {w:"cliente",t:"00:08",x:"Sí, con él."},
+    {w:"bot",t:"00:11",x:"Gracias. Le contacto por su póliza POL-2023-11902. Registramos 2 cuotas vencidas por un total de $312.40. ¿Desea regularizar el pago hoy?"},
+    {w:"cliente",t:"00:21",x:"Pero yo hice un pago la semana pasada, no entiendo por qué me llaman."},
+    {w:"bot",t:"00:27",x:"Permítame revisar… Veo un pago de $156.20 recibido el 19 de agosto. Queda pendiente una cuota de $156.20 más el mes en curso. ¿Le parece si acordamos una fecha de pago?"},
+    {w:"cliente",t:"00:41",x:"Puedo pagar el viernes 29."},
+    {w:"bot",t:"00:45",x:"Perfecto. Registro una promesa de pago por $312.40 para el viernes 29 de agosto. Recibirá un mensaje de confirmación."},
+    {w:"cliente",t:"00:56",x:"Ya, pero dejen de llamarme tan seguido, es molesto."},
+    {w:"bot",t:"01:01",x:"Comprendo su molestia y le pido disculpas. Voy a derivar su caso a un asesor humano para revisar la frecuencia de contacto. Un momento por favor."},
+    {w:"sys",t:"01:12",x:"Llamada transferida a agente humano — cola Cobranzas Nivel 2."}
+  ];
+  var SPARK=[0.10,-0.20,-0.55,0.15,-0.70];
+  var vbReady=false;
+  function ensureVoicebot(){
+    if(vbReady) return; vbReady=true;
+    var tr=$("#transcript");
+    TURNS.forEach(function(o){
+      var d=document.createElement("div");
+      d.className="turn "+o.w;
+      if(o.w==="sys"){ d.innerHTML='<div><div class="who">Sistema</div><div class="txt">'+o.x+'</div></div>'; }
+      else{
+        d.innerHTML='<div class="t">'+o.t+'</div><div><div class="who">'+(o.w==="bot"?"Voicebot":"Cliente")+'</div><div class="txt">'+o.x+'</div></div>';
+      }
+      tr.appendChild(d);
+    });
+    var sp=$("#vbSpark");
+    SPARK.forEach(function(v){
+      var i=document.createElement("i");
+      var h=10+Math.abs(v)*46;
+      i.style.height=h+"px";
+      i.style.background = v<=-0.5 ? "var(--crit)" : (v<0 ? "var(--warn)" : "var(--ok)");
+      sp.appendChild(i);
+    });
+  }
+  $("#vbPlay").addEventListener("click",function(){
+    ensureVoicebot();
+    var turns=$$("#transcript .turn");
+    turns.forEach(function(t){ t.classList.remove("active"); });
+    var k=0;
+    (function step(){
+      if(k>0) turns[k-1] && turns[k-1].classList.remove("active");
+      if(k>=turns.length) return;
+      turns[k].classList.add("active");
+      turns[k].scrollIntoView({behavior: RM?"auto":"smooth",block:"center"});
+      k++;
+      setTimeout(step, RM?0:1300);
+    })();
+  });
+
+  /* ================= VIEW 4 · SENTIMIENTO ================= */
+  var INTER=[
+    {when:"12 ago",dir:"Saliente",canal:"Email",txt:"Recordatorio de cuota vencida y opciones de pago.",sent:"Neutro",cls:"pill--muted",sc:"0.02",chips:["informativo"]},
+    {when:"18 ago",dir:"Entrante",canal:"WhatsApp",txt:"“Ya sé que debo, estoy viendo cómo pagar, denme unos días.”",sent:"Negativo",cls:"pill--warn",sc:"−0.34",chips:["reconoce deuda","pide plazo","frustración leve"]},
+    {when:"22 ago",dir:"Saliente",canal:"Llamada",txt:"Llamada de cobranza nivel 1 — sin respuesta.",sent:"Neutro",cls:"pill--muted",sc:"0.00",chips:["sin contacto"]},
+    {when:"25 ago",dir:"Entrante",canal:"WhatsApp",txt:"“Me están escribiendo todos los días, ya les dije que voy a pagar.”",sent:"Negativo",cls:"pill--warn",sc:"−0.48",chips:["molestia por frecuencia","promesa verbal"]},
+    {when:"26 ago",dir:"Saliente",canal:"Email",txt:"Aviso de posible suspensión de cobertura.",sent:"Neutro",cls:"pill--muted",sc:"−0.05",chips:["aviso formal"]},
+    {when:"27 ago",dir:"Entrante",canal:"WhatsApp",txt:"“Si me siguen llamando y escribiendo todos los días voy a cancelar el seguro, esto es acoso.”",sent:"Muy negativo",cls:"pill--crit",sc:"−0.87",chips:["amenaza de cancelación","percepción de acoso","frecuencia de contacto"]}
+  ];
+  var tl=$("#sentiTimeline");
+  INTER.forEach(function(o){
+    var d=document.createElement("div");
+    d.className="tl-item";
+    d.innerHTML=
+      '<div class="when">'+o.when+'<br>'+o.canal+'</div>'+
+      '<div class="body"><div class="dirline"><span class="chip">'+o.dir+'</span></div><p>'+o.txt+'</p>'+
+      '<div class="chip-row reveal">'+o.chips.map(function(c){return '<span class="chip">'+c+'</span>';}).join("")+'</div></div>'+
+      '<div class="tl-badge"><span class="pill '+o.cls+' reveal">'+o.sent+'</span><span class="sc reveal">score '+o.sc+'</span></div>';
+    tl.appendChild(d);
+  });
+  var sentiDone=false;
+  $("#analyzeBtn").addEventListener("click",function(){
+    if(sentiDone) return;
+    var btn=this; btn.disabled=true;
+    var items=$$(".reveal");
+    var i=0;
+    (function stepR(){
+      if(i>=items.length){ sentiDone=true; btn.innerHTML="✓ Interacciones analizadas"; toast("6 interacciones analizadas por IA"); return; }
+      items[i].classList.add("on"); i++;
+      setTimeout(stepR, RM?0:120);
+    })();
+  });
+  // distribution bar
+  var DIST=[["var(--ok)",0],["var(--faint)",3],["var(--warn)",2],["var(--crit)",1]];
+  var total=DIST.reduce(function(a,b){return a+b[1];},0);
+  DIST.forEach(function(d){
+    if(!d[1]) return;
+    var i=document.createElement("i");
+    i.style.width=(d[1]/total*100)+"%"; i.style.background=d[0];
+    $("#sentiDist").appendChild(i);
+  });
+
+  /* ================= VIEW 5 · TABLERO ================= */
+  var ALERTS=[
+    {pol:"POL-2022-09310",cli:"Luis Alberto Peña",m:906.75,d:95,mot:["sentimiento muy negativo","amenaza de cancelación"]},
+    {pol:"POL-2024-00785",cli:"Comercial Nogales S.A.",m:1204.00,d:78,mot:["mora acelerada","promesa incumplida"]},
+    {pol:"POL-2021-05540",cli:"Grupo Delgado Cía.",m:2480.00,d:120,mot:["mora acelerada","alto monto"]},
+    {pol:"POL-2023-07788",cli:"Kevin Villacís Mora",m:268.90,d:27,mot:["promesa incumplida"]},
+    {pol:"POL-2024-03344",cli:"Paola Zambrano Mite",m:54.20,d:8,mot:["caída de sentimiento"]}
+  ];
+  var ab=$("#alertBody");
+  ALERTS.forEach(function(a){
+    var tr=document.createElement("tr");
+    tr.innerHTML='<td class="mono">'+a.pol+'</td><td>'+a.cli+'</td><td class="num">'+money(a.m)+'</td><td class="num">'+a.d+'</td>'+
+      '<td><div class="chip-row">'+a.mot.map(function(m){return '<span class="chip">'+m+'</span>';}).join("")+'</div></td>';
+    ab.appendChild(tr);
+  });
+
+  var chartDrawn=false;
+  function drawChart(){
+    var showIA=$("#iaToggle").checked;
+    var cats=["Hoy","+30 días","+60 días","+90 días"];
+    var sinG=[84.6,118.4,152.9,187.3];
+    var conIA=[84.6,96.2,88.7,79.4];
+    var W=760,H=340,padL=54,padR=14,padT=18,padB=46;
+    var plotW=W-padL-padR, plotH=H-padT-padB, max=200;
+    var yOf=function(v){ return padT+plotH-(v/max)*plotH; };
+    var gW=plotW/cats.length;
+    var bW=showIA? gW*0.26 : gW*0.34;
+    var svg='<svg class="proj-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Proyección de cartera vencida a 30, 60 y 90 días">';
+    for(var g=0;g<=200;g+=50){
+      var y=yOf(g);
+      svg+='<line class="grid-l" x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'"/>';
+      svg+='<text class="axis-t" x="'+(padL-8)+'" y="'+(y+4)+'" text-anchor="end">$'+g+'k</text>';
+    }
+    cats.forEach(function(c,i){
+      var cx=padL+gW*i+gW/2;
+      var x1 = showIA ? cx-bW-3 : cx-bW/2;
+      var h1=plotH-(yOf(sinG[i])-padT);
+      svg+='<rect x="'+x1+'" y="'+yOf(sinG[i])+'" width="'+bW+'" height="'+h1+'" rx="3" fill="var(--crit)"/>';
+      svg+='<text class="bar-lab" x="'+(x1+bW/2)+'" y="'+(yOf(sinG[i])-6)+'" text-anchor="middle">'+sinG[i]+'</text>';
+      if(showIA){
+        var x2=cx+3;
+        var h2=plotH-(yOf(conIA[i])-padT);
+        svg+='<rect x="'+x2+'" y="'+yOf(conIA[i])+'" width="'+bW+'" height="'+h2+'" rx="3" fill="var(--accent)"/>';
+        svg+='<text class="bar-lab" x="'+(x2+bW/2)+'" y="'+(yOf(conIA[i])-6)+'" text-anchor="middle">'+conIA[i]+'</text>';
+      }
+      svg+='<text class="axis-t" x="'+cx+'" y="'+(H-padB+22)+'" text-anchor="middle">'+c+'</text>';
+    });
+    svg+='<line class="grid-l" x1="'+padL+'" y1="'+padT+'" x2="'+padL+'" y2="'+(padT+plotH)+'"/>';
+    svg+='</svg>';
+    svg+='<p class="note" style="margin-top:8px">Montos en miles de USD. Escenario «con gestión IA»: recordatorios segmentados + planes de pago proactivos + pausa automática en pólizas de alto riesgo.</p>';
+    $("#projChart").innerHTML=svg;
+    chartDrawn=true;
+  }
+  $("#iaToggle").addEventListener("change",drawChart);
+
+  /* ---------- MODAL ---------- */
+  var modal=$("#reportModal");
+  function openModal(){ modal.hidden=false; $("#rmClose").focus(); }
+  function closeModal(){ modal.hidden=true; $("#reportBtn").focus(); }
+  $("#reportBtn").addEventListener("click",openModal);
+  $("#rmClose").addEventListener("click",closeModal);
+  modal.addEventListener("click",function(e){ if(e.target===modal) closeModal(); });
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape" && !modal.hidden) closeModal(); });
+})();
+</script>
+
+<script>
+/* Alto del iframe -> contenedor anfitrión (solo cuando va embebido en la app) */
+(function(){
+  function post(){ try{ parent.postMessage({ __cbzH: document.documentElement.scrollHeight }, "*"); }catch(e){} }
+  addEventListener("load", post);
+  addEventListener("resize", post);
+  if (window.ResizeObserver) { try{ new ResizeObserver(post).observe(document.body); }catch(e){} }
+  setTimeout(post, 300); setTimeout(post, 1200); setTimeout(post, 3000);
+})();
+</script>
+</body>
+</html>

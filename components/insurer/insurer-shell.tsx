@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Boxes, Building2, ChartNoAxesCombined, ChevronLeft, ChevronRight, FileStack, LogOut, Network, ScanSearch, ShieldCheck, Users } from "lucide-react";
+import { Boxes, Building2, ChartNoAxesCombined, ChevronLeft, ChevronRight, FileStack, LogOut, Network, ScanSearch, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { MobileNavigationMenu } from "@/components/internal/mobile-navigation-menu";
 import type { AppSession } from "@/lib/auth/session";
@@ -14,6 +14,7 @@ const items = [
   { href: "/aseguradora/agentes", label: "Usuarios de canal", icon: Users },
   { href: "/aseguradora/operacion", label: "Operación", icon: FileStack },
   { href: "/aseguradora/inspecciones", label: "Inspecciones", icon: ScanSearch },
+  { href: "/aseguradora/cobranzas-ia", label: "Cobranzas IA", icon: Sparkles },
 ];
 
 export function InsurerShell({ session, insurerName, children }: { session: AppSession; insurerName: string; children: React.ReactNode }) {

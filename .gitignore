@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code local settings (per-user, contains absolute paths)
+.claude/settings.json
+.claude/settings.local.json
