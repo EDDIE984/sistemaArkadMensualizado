@@ -65,4 +65,4 @@ export function ActivationForm({ token }: { token: string }) {
   );
 }
 
-const inputClass = "min-h-12 w-full rounded-xl border border-white/20 bg-black/20 pl-11 pr-12 text-sm text-white outline-none transition-colors placeholder:text-white/42 focus:border-white/60 focus:bg-black/30";
+const inputClass = "min-h-12 w-full rounded-xl border border-white/20 bg-black/20 pl-11 pr-12 text-base text-white outline-none transition-colors placeholder:text-white/42 focus:border-white/60 focus:bg-black/30 sm:text-sm";

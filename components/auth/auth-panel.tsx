@@ -115,7 +115,9 @@ export function AuthPanel({ activated = false, passwordReset = false }: { activa
   );
 }
 
-const inputClass = "min-h-12 w-full rounded-xl border border-white/20 bg-black/20 pl-11 pr-4 text-sm text-white outline-none transition-colors placeholder:text-white/42 focus:border-white/60 focus:bg-black/30";
+// Safari en iOS amplía la página cuando un campo enfocable mide menos de 16 px.
+// Mantenemos 16 px en móvil y recuperamos la escala compacta desde `sm`.
+const inputClass = "min-h-12 w-full rounded-xl border border-white/20 bg-black/20 pl-11 pr-4 text-base text-white outline-none transition-colors placeholder:text-white/42 focus:border-white/60 focus:bg-black/30 sm:text-sm";
 
 function SubmitButton({ pending, children }: { pending: boolean; children: React.ReactNode }) {
   return (
