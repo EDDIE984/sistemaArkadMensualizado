@@ -132,8 +132,8 @@ function SlotBoard({
   const [error, setError] = useState<string | null>(null);
   const analisisKickRef = useRef(false);
 
-  // Fase 2: al completar la inspección, adelantar el análisis de daños en segundo
-  // plano (sin UI). El cron es la garantía; esto sólo acelera cuando hay alguien.
+  // Al completar la inspección, procesa los daños desde el navegador en segundo
+  // plano. Si se interrumpe, el usuario debe volver a completar el envío.
   const kickAnalisis = useCallback(() => {
     if (analisisKickRef.current) return;
     analisisKickRef.current = true;
@@ -151,7 +151,7 @@ function SlotBoard({
         }
         router.refresh();
       } catch {
-        // best-effort; el cron termina el trabajo
+        // El análisis es de mejor esfuerzo desde el navegador.
       } finally {
         analisisKickRef.current = false;
       }
