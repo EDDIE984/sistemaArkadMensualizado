@@ -783,11 +783,11 @@ el agente de canal (`/canal`). Al abrir la página de inspección:
    una foto por cada toma requerida. Este estado es **sólo informativo**: no se
    lee ni se escribe en `COTIZACION.estado`, y la aceptación de la cotización y la
    emisión de la póliza funcionan igual con o sin inspección.
-4. **Análisis de daños con IA (backend, se dispara al pasar a `COMPLETADA`).** Un
-   cron (`/api/inspeccion/analizar/cron`, autenticado con `CRON_SECRET`) barre las
-   inspecciones `COMPLETADA` con análisis pendiente y procesa las fotos en lotes;
-   además el cliente dispara el mismo endpoint sin UI apenas se completa. Por cada
-   foto: se reduce a ~1024 px y se envía a OpenAI (`OPENAI_VISION_MODEL`, default
+4. **Análisis de daños con IA (backend, se dispara al pasar a `COMPLETADA`).** El
+   navegador dispara el endpoint de análisis sin UI apenas se completa la última
+   toma y procesa las fotos en lotes. Si el envío se interrumpe, el usuario debe
+   volver a completar el envío de la inspección. Por cada foto: se reduce a ~1024 px
+   y se envía a OpenAI (`OPENAI_VISION_MODEL`, default
    `gpt-4o`), que devuelve una lista de daños, cada uno con `tipo`, `severidad`
    (`LEVE|MODERADA|GRAVE`), `accion_recomendada`, `pieza` y un recuadro
    normalizado `bbox` (aproximado). Se guarda una fila por daño en
@@ -954,10 +954,10 @@ vía `datos_nuevos.accion`), no cada foto ni cada daño.
     sensibles de autenticación.
 
     **Análisis de daños con IA:** al pasar la inspección a `COMPLETADA` se analiza
-    cada foto con OpenAI (`OPENAI_VISION_MODEL`, default `gpt-4o`). El disparo es
-    un cron (`/api/inspeccion/analizar/cron`, `CRON_SECRET`) que procesa por lotes
-    (≤4 fotos por invocación para no chocar el timeout serverless) — el cliente
-    dispara el mismo endpoint sin UI apenas se completa, para acelerar. Por foto se
+    cada foto con OpenAI (`OPENAI_VISION_MODEL`, default `gpt-4o`). El navegador
+    dispara el endpoint sin UI y procesa por lotes (≤4 fotos por invocación para no
+    chocar el timeout serverless). Si el proceso se interrumpe, el usuario debe
+    volver a completar el envío de la inspección. Por foto se
     guarda una fila por daño en `INSPECCION_DANO` (`tipo`, `severidad`
     `LEVE|MODERADA|GRAVE`, `accion_recomendada`, `pieza`, `bbox_*` normalizado
     0..1, `confianza`), se setea `INSPECCION_FOTO.analisis_estado`
