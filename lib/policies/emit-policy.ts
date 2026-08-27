@@ -113,8 +113,8 @@ export async function emitPolicy(input: { quoteId: string; policyNumber: string;
 
     await conn.query(
       `insert into auditoria (entidad, entidad_id, accion, datos_nuevos, usuario_id) values
-         ('POLIZA', $1, 'CREACION', jsonb_build_object('numero_poliza', $2::text, 'cotizacion_id', $3::text), $4),
-         ('COTIZACION', $3, 'CAMBIO_ESTADO', jsonb_build_object('estado', 'ACEPTADA', 'poliza_id', $1::text), $4)`,
+         ('POLIZA', $1::uuid, 'CREACION', jsonb_build_object('numero_poliza', $2::text, 'cotizacion_id', $3::uuid::text), $4::uuid),
+         ('COTIZACION', $3::uuid, 'CAMBIO_ESTADO', jsonb_build_object('estado', 'ACEPTADA', 'poliza_id', $1::uuid::text), $4::uuid)`,
       [policyId, number, input.quoteId, input.userId],
     );
 
