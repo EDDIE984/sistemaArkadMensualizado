@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Calculator, ChevronDown, FileText, ReceiptText, ScanSearch, ShieldCheck, Table2, TriangleAlert } from "lucide-react";
+import { Calculator, ChevronDown, FileText, ReceiptText, ScanSearch, Search, ShieldCheck, Table2, TriangleAlert } from "lucide-react";
 import { AdminPage, AdminPanel } from "@/components/admin/admin-ui";
 import { EmitPolicyForm } from "@/components/insurer/emit-policy-form";
 import { requireInsurerAdmin } from "@/lib/auth/session";
@@ -29,11 +29,13 @@ type PendingRow = {
 
 type Cuota = { poliza_id: string; numero_cuota: number; fecha_vencimiento: string; monto: string; estado: string };
 
-export default async function Operation() {
+export default async function Operation({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const session = await requireInsurerAdmin();
   const insurerId = session.insurerId!;
   const db = createAdminClient();
   const pool = getDbPool();
+  const { q = "" } = await searchParams;
+  const policySearch = q.trim();
 
   const [pending, quotes, policies, cobranzas] = await Promise.all([
     pool.query<PendingRow>(
@@ -65,12 +67,22 @@ export default async function Operation() {
       [insurerId],
     ),
     db.from("cotizacion").select("id,creado_en,estado,cuota_fija_mensual,anios_vigencia,cliente(nombre_razon_social,identificacion),producto(nombre)").eq("aseguradora_id", insurerId).order("creado_en", { ascending: false }).limit(200),
-    db.from("poliza").select("id,numero_poliza,fecha_emision,fecha_inicio_vigencia,fecha_fin_vigencia,estado,cotizacion!inner(id,aseguradora_id,cuota_fija_mensual,cliente(nombre_razon_social),producto(nombre))").eq("cotizacion.aseguradora_id", insurerId).order("fecha_emision", { ascending: false }).limit(200),
+    db.from("poliza").select("id,numero_poliza,fecha_emision,fecha_inicio_vigencia,fecha_fin_vigencia,estado,cotizacion!inner(id,aseguradora_id,cuota_fija_mensual,cliente(nombre_razon_social,identificacion),producto(nombre),vehiculo(placa))").eq("cotizacion.aseguradora_id", insurerId).order("fecha_emision", { ascending: false }).limit(200),
     db.from("tabla_cobranza").select("poliza_id,numero_cuota,fecha_vencimiento,monto,estado,poliza!inner(cotizacion!inner(aseguradora_id))").eq("poliza.cotizacion.aseguradora_id", insurerId).order("poliza_id").order("numero_cuota").limit(4000),
   ]);
 
   const pendingRows = pending.rows;
-  const policyRows = policies.data || [];
+  const allPolicyRows = policies.data || [];
+  const normalizedSearch = normalizeSearch(policySearch);
+  const policyRows = normalizedSearch
+    ? allPolicyRows.filter((policy) => {
+        const quote = firstRelation(policy.cotizacion);
+        const client = firstRelation(quote?.cliente);
+        const vehicle = firstRelation(quote?.vehiculo);
+        return [client?.nombre_razon_social, client?.identificacion, vehicle?.placa]
+          .some((value) => normalizeSearch(value).includes(normalizedSearch));
+      })
+    : allPolicyRows;
   const cuotas = (cobranzas.data || []) as unknown as Cuota[];
 
   const cuotasByPolicy = new Map<string, Cuota[]>();
@@ -80,7 +92,7 @@ export default async function Operation() {
     cuotasByPolicy.set(cuota.poliza_id, list);
   }
 
-  const vigentes = policyRows.filter((p) => p.estado === "VIGENTE").length;
+  const vigentes = allPolicyRows.filter((p) => p.estado === "VIGENTE").length;
   const porCobrar = cuotas.filter((c) => c.estado !== "PAGADO");
   const vencidas = cuotas.filter((c) => c.estado === "VENCIDO");
   const montoPorCobrar = porCobrar.reduce((sum, c) => sum + Number(c.monto), 0);
@@ -136,7 +148,23 @@ export default async function Operation() {
           </div>
         </AdminPanel>
 
-        <AdminPanel title={`Pólizas emitidas (${policyRows.length})`} description="Abre una póliza para ver su cronograma de cobranza" open>
+        <AdminPanel title={`Pólizas emitidas (${policyRows.length}${policySearch ? ` de ${allPolicyRows.length}` : ""})`} description="Busca por cédula, nombre o placa; abre una póliza para ver su cronograma" open>
+          <form className="mb-4 flex flex-col gap-3 sm:flex-row" role="search" aria-label="Buscar pólizas emitidas">
+            <label className="relative min-w-0 flex-1">
+              <span className="sr-only">Cédula, nombre del cliente o placa</span>
+              <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-white/42" aria-hidden="true" />
+              <input
+                name="q"
+                defaultValue={policySearch}
+                placeholder="Cédula, nombre del cliente o placa"
+                className="min-h-11 w-full rounded-xl border border-white/15 bg-[#061323]/65 py-2 pl-11 pr-4 text-base text-white outline-none placeholder:text-white/35 focus:border-cyan-100/55 sm:text-sm"
+              />
+            </label>
+            <div className="flex gap-2">
+              <button className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-white px-5 text-sm font-bold text-[#071426] sm:flex-none">Buscar</button>
+              {policySearch && <Link href="/aseguradora/operacion" className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-white/15 px-5 text-sm font-bold text-white/72 hover:bg-white/8 sm:flex-none">Limpiar</Link>}
+            </div>
+          </form>
           <div className="grid gap-2">
             {policyRows.map((p) => {
               const rows = cuotasByPolicy.get(p.id) || [];
@@ -176,7 +204,7 @@ export default async function Operation() {
                 </details>
               );
             })}
-            {!policyRows.length && <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center text-sm text-white/45">Todavía no hay pólizas emitidas.</p>}
+            {!policyRows.length && <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center text-sm text-white/45">{policySearch ? "No encontramos pólizas con esos datos." : "Todavía no hay pólizas emitidas."}</p>}
           </div>
         </AdminPanel>
 
@@ -276,6 +304,19 @@ function nested(value: unknown, ...keys: string[]): string {
     if (Array.isArray(current)) current = current[0];
   }
   return current == null ? "—" : String(current);
+}
+
+function firstRelation(value: unknown): Record<string, unknown> | null {
+  const row = Array.isArray(value) ? value[0] : value;
+  return row && typeof row === "object" ? row as Record<string, unknown> : null;
+}
+
+function normalizeSearch(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es-EC")
+    .replace(/[^a-z0-9]/g, "");
 }
 function date(v: string) {
   return new Date(v).toLocaleDateString("es-EC");
