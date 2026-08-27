@@ -55,9 +55,6 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const result = await analyzeInspeccionBatch({ cotizacionId, max: 4 });
-    if (result.skipped === "no-completa") {
-      return json({ error: "La inspección aún no está completa." }, 409);
-    }
     if (result.skipped === "sin-inspeccion") {
       return json({ error: "Esta cotización no tiene inspección." }, 404);
     }

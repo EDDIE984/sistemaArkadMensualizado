@@ -130,32 +130,47 @@ function SlotBoard({
   const [captureSlot, setCaptureSlot] = useState<SlotCode | null>(null);
   const [busySlot, setBusySlot] = useState<SlotCode | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [analysisNotice, setAnalysisNotice] = useState<string | null>(null);
+  const [analysing, setAnalysing] = useState(false);
   const analisisKickRef = useRef(false);
 
-  // Al completar la inspección, procesa los daños desde el navegador en segundo
-  // plano. Si se interrumpe, el usuario debe volver a completar el envío.
-  const kickAnalisis = useCallback(() => {
+  // El análisis puede iniciar con las fotos ya guardadas, aun si faltan tomas.
+  const kickAnalisis = useCallback(async (manual = false) => {
     if (analisisKickRef.current) return;
     analisisKickRef.current = true;
-    void (async () => {
-      try {
-        for (let i = 0; i < 20; i++) {
-          const r = await fetch("/api/inspeccion/analizar", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ cotizacionId }),
-          });
-          if (!r.ok) break;
-          const body = (await r.json().catch(() => null)) as { pendientes?: number } | null;
-          if (!body || !body.pendientes) break;
-        }
-        router.refresh();
-      } catch {
-        // El análisis es de mejor esfuerzo desde el navegador.
-      } finally {
-        analisisKickRef.current = false;
+    setAnalysing(true);
+    if (manual) setAnalysisNotice(null);
+    try {
+      let analyzed = 0;
+      let pending = 0;
+      let failures = 0;
+      for (let i = 0; i < 20; i++) {
+        const r = await fetch("/api/inspeccion/analizar", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ cotizacionId }),
+        });
+        const body = (await r.json().catch(() => null)) as { analizadas?: number; pendientes?: number; errores?: number; error?: string } | null;
+        if (!r.ok) throw new Error(body?.error || "No pudimos analizar las fotos guardadas.");
+        analyzed += body?.analizadas ?? 0;
+        pending = body?.pendientes ?? 0;
+        failures = body?.errores ?? 0;
+        if (!pending) break;
       }
-    })();
+      if (manual) {
+        setAnalysisNotice(
+          failures
+            ? `Guardado parcial realizado. Se analizaron ${analyzed} foto(s), pero ${failures} requieren un nuevo intento.`
+            : `Guardado parcial realizado. La IA analizó ${analyzed} foto(s) disponibles.`,
+        );
+      }
+      router.refresh();
+    } catch (caught) {
+      if (manual) setError(caught instanceof Error ? caught.message : "No pudimos analizar las fotos guardadas.");
+    } finally {
+      setAnalysing(false);
+      analisisKickRef.current = false;
+    }
   }, [cotizacionId, router]);
 
   const slots = requiredSlots(inspeccion.carroceria);
@@ -196,6 +211,32 @@ function SlotBoard({
         La inspección es informativa: no cambia el estado de la cotización ni bloquea la emisión.
       </p>
 
+      {inspeccion.estado !== "COMPLETADA" && (
+        <section className="flex flex-col gap-4 rounded-2xl border border-amber-200/25 bg-amber-200/8 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-bold text-amber-50">Guardado parcial</p>
+            <p className="mt-1 text-xs leading-5 text-amber-50/70">
+              Faltan {inspeccion.requeridas - inspeccion.completadas} toma(s) para completar la inspección. Puedes guardar y analizar las fotos disponibles ahora.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void kickAnalisis(true)}
+            disabled={!inspeccion.completadas || analysing}
+            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-amber-100/30 bg-amber-100/12 px-5 text-sm font-bold text-amber-50 transition-colors hover:bg-amber-100/18 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {analysing ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+            {analysing ? "Analizando…" : "Guardar y analizar"}
+          </button>
+        </section>
+      )}
+
+      {analysisNotice && (
+        <p className="rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm text-emerald-50" role="status">
+          {analysisNotice}
+        </p>
+      )}
+
       {error && (
         <p className="rounded-xl border border-red-300/25 bg-red-300/10 px-4 py-3 text-sm text-red-50" role="alert">
           {error}
@@ -226,7 +267,7 @@ function SlotBoard({
           onSaved={(result) => {
             setCaptureSlot(null);
             router.refresh();
-            if (result?.estado === "COMPLETADA") kickAnalisis();
+            if (result?.estado === "COMPLETADA") void kickAnalisis();
           }}
         />
       )}

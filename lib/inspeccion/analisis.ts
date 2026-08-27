@@ -287,7 +287,7 @@ export type BatchResult = {
   analizadas: number;
   pendientes: number;
   errores: number;
-  skipped?: "sin-inspeccion" | "no-completa";
+  skipped?: "sin-inspeccion";
 };
 
 /**
@@ -428,19 +428,18 @@ export async function analyzePhoto(input: { fotoId: string }): Promise<PhotoAnal
 }
 
 /**
- * Procesa hasta `max` fotos pendientes de una inspección COMPLETADA. Quien llama
- * (cron o el cliente) repite hasta `pendientes === 0`.
+ * Procesa hasta `max` fotos pendientes de una inspección. Se permite análisis
+ * parcial: la inspección puede continuar en EN_PROGRESO mientras falten tomas.
  */
 export async function analyzeInspeccionBatch(input: { cotizacionId: string; max?: number }): Promise<BatchResult> {
   const max = input.max ?? 4;
   const pool = getDbPool();
 
-  const insp = await pool.query<{ id: string; estado: string }>(
-    "select id, estado from inspeccion where cotizacion_id = $1",
+  const insp = await pool.query<{ id: string }>(
+    "select id from inspeccion where cotizacion_id = $1",
     [input.cotizacionId],
   );
   if (insp.rowCount !== 1) return { analizadas: 0, pendientes: 0, errores: 0, skipped: "sin-inspeccion" };
-  if (insp.rows[0].estado !== "COMPLETADA") return { analizadas: 0, pendientes: 0, errores: 0, skipped: "no-completa" };
   const inspeccionId = insp.rows[0].id;
 
   const pend = await pool.query<{ id: string }>(
@@ -467,34 +466,4 @@ export async function analyzeInspeccionBatch(input: { cotizacionId: string; max?
     [inspeccionId],
   );
   return { analizadas, pendientes: agg.rows[0].pendientes, errores: agg.rows[0].errores };
-}
-
-/**
- * Barrido para el cron: toma inspecciones COMPLETADA con análisis pendiente y
- * procesa un lote de cada una.
- */
-export async function sweepInspeccionesPendientes(input?: {
-  maxInspecciones?: number;
-  maxFotos?: number;
-}): Promise<{ inspecciones: number; resultados: Array<{ cotizacionId: string } & BatchResult> }> {
-  const maxInsp = input?.maxInspecciones ?? 3;
-  const maxFotos = input?.maxFotos ?? 4;
-  const pool = getDbPool();
-
-  const { rows } = await pool.query<{ cotizacion_id: string }>(
-    `select cotizacion_id from inspeccion
-      where estado = 'COMPLETADA' and analisis_estado in ('PENDIENTE','EN_PROCESO','CON_ERRORES')
-      order by completada_en asc nulls last
-      limit $1`,
-    [maxInsp],
-  );
-
-  const resultados: Array<{ cotizacionId: string } & BatchResult> = [];
-  for (const row of rows) {
-    resultados.push({
-      cotizacionId: row.cotizacion_id,
-      ...(await analyzeInspeccionBatch({ cotizacionId: row.cotizacion_id, max: maxFotos })),
-    });
-  }
-  return { inspecciones: rows.length, resultados };
 }
