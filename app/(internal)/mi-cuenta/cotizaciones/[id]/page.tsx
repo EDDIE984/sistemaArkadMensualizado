@@ -47,7 +47,7 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
 
     <section className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <Metric icon={<ShieldCheck />} label="Cuota fija mensual" value={money(Number(quote.cuota_fija_mensual))} />
-      <Metric icon={<TrendingUp />} label="Tasa promedio" value={`${(Number(quote.tasa_promedio) * 100).toFixed(3)}%`} />
+      <Metric icon={<TrendingUp />} label="Tasa promedio" value={`${(Number(quote.tasa_promedio) * 100).toFixed(2)}%`} />
       <Metric icon={<ShieldCheck />} label="Nivel de riesgo" value={riskLabel} />
       <Metric icon={<CalendarDays />} label="Vigencia" value={`${quote.anios_vigencia} años`} />
     </section>

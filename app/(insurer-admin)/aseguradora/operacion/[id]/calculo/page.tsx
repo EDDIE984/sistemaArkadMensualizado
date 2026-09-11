@@ -99,7 +99,7 @@ export default async function CalculoDetalle({
           detail={`${rel(quote.vehiculo, "anio")} · ${rel(quote.vehiculo, "estado_vh")} · ${money(rel(quote.vehiculo, "valor_asegurado"))}`}
         />
         <Info label="Vigencia" value={`${quote.anios_vigencia} años · ${rows.length} cuotas`} detail={vigencia(quote.fecha_inicio_vigencia, quote.fecha_fin_vigencia, quote.total_dias)} />
-        <Info label="Tasa promedio" value={pct(Number(quote.tasa_promedio), 4)} detail={`Nivel de riesgo ${quote.nivel_riesgo}`} />
+        <Info label="Tasa promedio" value={pct(Number(quote.tasa_promedio), 2)} detail={`Nivel de riesgo ${quote.nivel_riesgo}`} />
         <Info label="Comisión del canal" value={commissionPct == null ? "Sin calcular" : pct(commissionPct, 2)} detail={commissionPct == null ? "Recalcula la cotización" : `${money(totals.comision_canal)} en total`} highlight={commissionPct == null} />
         <Info label="Cuota fija mensual" value={money(Number(quote.cuota_fija_mensual))} detail="Pago nivelado del cliente" />
         <Info label="Prima neta total" value={money(totals.prima_neta_mes)} detail={`Prima total ${money(totals.prima_total_mes)}`} />
