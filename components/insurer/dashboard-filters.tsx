@@ -8,7 +8,7 @@ export const MONTHS: [number, string][] = [
 const control =
   "min-h-11 min-w-0 rounded-xl border border-white/15 bg-[#061323]/65 px-3.5 text-sm text-white outline-none focus:border-cyan-100/55 [color-scheme:dark]";
 
-type Selected = { canal: string | null; anio: number; mes: number | null };
+type Selected = { canal: string | null; desde: number; hasta: number };
 
 export function DashboardFilters({
   canales,
@@ -19,10 +19,10 @@ export function DashboardFilters({
   years: number[];
   selected: Selected;
 }) {
-  const dirty = selected.canal !== null || selected.mes !== null || selected.anio !== years[0];
+  const dirty = selected.canal !== null || selected.desde !== years[0] || selected.hasta !== years[0];
 
   return (
-    <form className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+    <form className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
       <label className="grid gap-1.5">
         <span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Canal</span>
         <select name="canal" defaultValue={selected.canal ?? ""} className={control}>
@@ -33,19 +33,18 @@ export function DashboardFilters({
         </select>
       </label>
       <label className="grid gap-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Año</span>
-        <select name="anio" defaultValue={String(selected.anio)} className={control}>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Desde</span>
+        <select name="desde" defaultValue={String(selected.desde)} className={control}>
           {years.map((y) => (
             <option key={y} value={y}>{y}</option>
           ))}
         </select>
       </label>
       <label className="grid gap-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Mes</span>
-        <select name="mes" defaultValue={selected.mes ? String(selected.mes) : ""} className={control}>
-          <option value="">Todo el año</option>
-          {MONTHS.map(([value, label]) => (
-            <option key={value} value={value}>{label}</option>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Hasta</span>
+        <select name="hasta" defaultValue={String(selected.hasta)} className={control}>
+          {years.map((y) => (
+            <option key={y} value={y}>{y}</option>
           ))}
         </select>
       </label>
