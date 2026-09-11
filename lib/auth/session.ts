@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -65,7 +66,10 @@ export async function createSession({
   });
 }
 
-export async function getSession(): Promise<AppSession | null> {
+// cache() deduplica esta resolución (2 queries) entre layout/page/pages
+// anidados del MISMO request; React/Next crea un scope de caché nuevo por
+// cada request, así que no hay estado compartido entre usuarios ni requests.
+export const getSession = cache(async (): Promise<AppSession | null> => {
   const rawToken = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!rawToken) return null;
 
@@ -123,7 +127,7 @@ export async function getSession(): Promise<AppSession | null> {
   }
 
   return null;
-}
+});
 
 export async function requireSession() {
   const session = await getSession();

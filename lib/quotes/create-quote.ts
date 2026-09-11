@@ -298,19 +298,55 @@ export async function createSelfServiceQuote(input: CreateQuoteInput) {
     }
 
     let accumulated = 0;
+    const mesArr: number[] = [];
+    const valorAseguradoArr: number[] = [];
+    const primaNetaArr: number[] = [];
+    const comisionArr: number[] = [];
+    const bancosArr: number[] = [];
+    const campesinoArr: number[] = [];
+    const derechosArr: number[] = [];
+    const subtotalArr: number[] = [];
+    const ivaArr: number[] = [];
+    const primaTotalArr: number[] = [];
+    const cuotaFijaArr: number[] = [];
+    const diferenciaArr: number[] = [];
+    const nivelacionArr: number[] = [];
     for (let index = 0; index < monthlyRows.length; index += 1) {
       const row = monthlyRows[index];
       const difference = fixedPayment - row.total;
       accumulated += difference;
-      await connection.query(`
-        insert into amortizacion_mensual (
-          cotizacion_id,mes,valor_asegurado_mes,prima_neta_mes,comision_canal,super_bancos,
-          seguro_campesino,derechos_emision,subtotal,iva,prima_total_mes,
-          cuota_fija,diferencia,nivelacion_acumulada
-        ) values ($1,$2,$3,$4,$14,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-      `, [quoteId,index+1,row.insuredValue,row.netPremium,row.banks,row.farmerInsurance,
-        row.issuance,row.subtotal,row.vat,row.total,fixedPayment,difference,accumulated,row.commission]);
+      mesArr.push(index + 1);
+      valorAseguradoArr.push(row.insuredValue);
+      primaNetaArr.push(row.netPremium);
+      comisionArr.push(row.commission);
+      bancosArr.push(row.banks);
+      campesinoArr.push(row.farmerInsurance);
+      derechosArr.push(row.issuance);
+      subtotalArr.push(row.subtotal);
+      ivaArr.push(row.vat);
+      primaTotalArr.push(row.total);
+      cuotaFijaArr.push(fixedPayment);
+      diferenciaArr.push(difference);
+      nivelacionArr.push(accumulated);
     }
+    await connection.query(`
+      insert into amortizacion_mensual (
+        cotizacion_id,mes,valor_asegurado_mes,prima_neta_mes,comision_canal,super_bancos,
+        seguro_campesino,derechos_emision,subtotal,iva,prima_total_mes,
+        cuota_fija,diferencia,nivelacion_acumulada
+      )
+      select $1::uuid,u.mes,u.valor_asegurado_mes,u.prima_neta_mes,u.comision_canal,u.super_bancos,
+             u.seguro_campesino,u.derechos_emision,u.subtotal,u.iva,u.prima_total_mes,
+             u.cuota_fija,u.diferencia,u.nivelacion_acumulada
+      from unnest(
+        $2::int[],$3::numeric[],$4::numeric[],$5::numeric[],$6::numeric[],
+        $7::numeric[],$8::numeric[],$9::numeric[],$10::numeric[],$11::numeric[],
+        $12::numeric[],$13::numeric[],$14::numeric[]
+      ) as u(mes,valor_asegurado_mes,prima_neta_mes,comision_canal,super_bancos,
+             seguro_campesino,derechos_emision,subtotal,iva,prima_total_mes,
+             cuota_fija,diferencia,nivelacion_acumulada)
+    `, [quoteId,mesArr,valorAseguradoArr,primaNetaArr,comisionArr,bancosArr,
+      campesinoArr,derechosArr,subtotalArr,ivaArr,primaTotalArr,cuotaFijaArr,diferenciaArr,nivelacionArr]);
 
     if (existingQuote) {
       await connection.query(`

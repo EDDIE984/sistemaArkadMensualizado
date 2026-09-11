@@ -144,6 +144,7 @@ function SlotBoard({
       let analyzed = 0;
       let pending = 0;
       let failures = 0;
+      let staleRounds = 0;
       for (let i = 0; i < 20; i++) {
         const r = await fetch("/api/inspeccion/analizar", {
           method: "POST",
@@ -152,10 +153,20 @@ function SlotBoard({
         });
         const body = (await r.json().catch(() => null)) as { analizadas?: number; pendientes?: number; errores?: number; error?: string } | null;
         if (!r.ok) throw new Error(body?.error || "No pudimos analizar las fotos guardadas.");
-        analyzed += body?.analizadas ?? 0;
+        const roundAnalyzed = body?.analizadas ?? 0;
+        analyzed += roundAnalyzed;
         pending = body?.pendientes ?? 0;
         failures = body?.errores ?? 0;
         if (!pending) break;
+        // Sin avance real (p. ej. otra pestaña ya reclamó las fotos elegibles):
+        // esperar con backoff antes de reintentar, en vez de reintentar de inmediato.
+        if (roundAnalyzed === 0) {
+          staleRounds += 1;
+          if (staleRounds >= 3) break;
+          await new Promise((resolve) => setTimeout(resolve, Math.min(500 * 2 ** staleRounds, 4000)));
+        } else {
+          staleRounds = 0;
+        }
       }
       if (manual) {
         setAnalysisNotice(
