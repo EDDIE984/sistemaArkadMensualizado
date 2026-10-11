@@ -1,28 +1,70 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { ArrowLeft, CalendarDays, CarFront, ScanLine, ShieldCheck, TrendingUp } from "lucide-react";
+import { notFound } from "next/navigation";
+import { ArrowLeft, FileDown, PencilLine, ScanLine } from "lucide-react";
+import { OrderEditor } from "@/components/channel/order-editor";
+import type { QuoteEditInitial } from "@/components/quotes/quote-wizard";
 import { requireChannelUser } from "@/lib/auth/session";
+import { getQuoteFormData } from "@/lib/quotes/data";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isCarroceria, requiredSlots } from "@/lib/inspeccion/slots";
 
-export const metadata:Metadata={title:"Detalle de cotización | Kuantix",robots:{index:false,follow:false}};
-export default async function Page({params,searchParams}:{params:Promise<{id:string}>;searchParams:Promise<{created?:string}>}){
-  const session=await requireChannelUser(); const {id}=await params; const query=await searchParams; const db=createAdminClient();
-  const {data:quote}=await db.from("cotizacion").select("id,creado_en,estado,anios_vigencia,fecha_inicio_vigencia,fecha_fin_vigencia,total_dias,tasa_promedio,nivel_riesgo,cuota_fija_mensual,cliente(nombre_razon_social,identificacion,email),producto(nombre),vehiculo(marca,modelo,anio,color,valor_asegurado,placa),usuario(nombre),inspeccion(carroceria,estado,inspeccion_foto(count))").eq("id",id).eq("canal_id",session.channelId!).maybeSingle();
-  if(!quote)redirect("/canal/cotizaciones");
-  const inspeccionBadge=inspectionBadge(quote.inspeccion);
-  const {data:schedule}=await db.from("amortizacion_mensual").select("mes,valor_asegurado_mes,prima_total_mes,cuota_fija").eq("cotizacion_id",id).order("mes");
-  const totalVigencia=(schedule||[]).reduce((total,row)=>total+Number(row.cuota_fija),0);
-  const vehicle=first(quote.vehiculo),client=first(quote.cliente);
-  return <main className="relative z-10 mx-auto w-full max-w-[1120px] px-4 py-8 sm:px-7 lg:px-10"><Link href="/canal/cotizaciones" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-ink-muted"><ArrowLeft className="size-4"/>Cotizaciones</Link>{query.created==="1"&&<p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm">Cotización asistida calculada y guardada correctamente.</p>}<header className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-brand-text/80">{client?.nombre_razon_social}</p><h1 className="mt-2 text-4xl font-bold tracking-[-0.035em]">{vehicle?.marca} {vehicle?.modelo}</h1><p className="mt-2 text-sm text-ink-muted">{rel(quote.producto,"nombre")} · Agente {rel(quote.usuario,"nombre")}</p></div><div className="flex flex-wrap items-center gap-2"><Link href={`/canal/cotizaciones/${id}/inspeccion`} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-brand/25 bg-brand/10 px-4 text-xs font-bold uppercase tracking-wider text-brand-text hover:bg-brand/15"><ScanLine className="size-4"/> Inspección{inspeccionBadge?` · ${inspeccionBadge}`:""}</Link><span className="w-fit rounded-full border border-brand/25 bg-brand/10 px-4 py-2 text-xs font-bold">{quote.estado}</span></div></header>
-    <section className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"><Metric icon={<ShieldCheck/>} label="Cuota mensual" value={money(quote.cuota_fija_mensual)}/><Metric icon={<TrendingUp/>} label="Tasa promedio" value={`${(Number(quote.tasa_promedio)*100).toFixed(2)}%`}/><Metric icon={<ShieldCheck/>} label="Riesgo" value={quote.nivel_riesgo===1?"Alto":quote.nivel_riesgo===2?"Moderado":"Bajo"}/><Metric icon={<CalendarDays/>} label="Cuotas" value={String(quote.anios_vigencia*12)}/><Metric icon={<CalendarDays/>} label="Total de vigencia" value={money(totalVigencia)} detail={`${schedule?.length||0} cuotas durante ${quote.anios_vigencia} años`}/></section>
-    <section className="glass-panel mt-4 p-5"><h2 className="flex items-center gap-2 font-bold"><CalendarDays className="size-5 text-brand"/>Vigencia de cobertura</h2><dl className="mt-5 grid gap-4 sm:grid-cols-3"><Detail label="Fecha de inicio" value={date(quote.fecha_inicio_vigencia)}/><Detail label="Fecha de finalización" value={date(quote.fecha_fin_vigencia)}/><Detail label="Total de días" value={String(quote.total_dias||0)}/></dl></section>
-    <section className="mt-4 grid gap-4 lg:grid-cols-2"><article className="glass-panel p-5"><h2 className="flex items-center gap-2 font-bold"><CarFront className="size-5 text-brand"/>Vehículo</h2><dl className="mt-5 grid grid-cols-2 gap-4"><Detail label="Año" value={String(vehicle?.anio||"—")}/><Detail label="Color" value={vehicle?.color||"—"}/><Detail label="Valor" value={money(vehicle?.valor_asegurado||0)}/><Detail label="Placa" value={vehicle?.placa||"—"}/></dl></article><article className="glass-panel p-5"><h2 className="font-bold">Cliente</h2><dl className="mt-5 grid gap-4"><Detail label="Identificación" value={client?.identificacion||"—"}/><Detail label="Correo" value={client?.email||"—"}/></dl></article></section>
-    <section className="glass-panel mt-4 overflow-hidden"><header className="p-5"><h2 className="font-bold">Proyección mensual</h2><p className="mt-1 text-xs text-ink-subtle">{schedule?.length||0} períodos completos, sin prorrateos.</p></header><div className="grid divide-y divide-line md:hidden">{(schedule||[]).map(row=><div key={row.mes} className="grid grid-cols-2 gap-2 p-4 text-xs"><span>Mes {row.mes}</span><strong className="text-right">{money(row.cuota_fija)}</strong><span className="text-ink-subtle">Valor asegurado</span><span className="text-right text-ink-muted">{money(row.valor_asegurado_mes)}</span></div>)}</div><div className="hidden max-h-[500px] overflow-auto md:block"><table className="w-full text-sm"><thead className="sticky top-0 bg-surface-muted"><tr><th className="p-3 text-left">Mes</th><th className="p-3 text-left">Valor asegurado</th><th className="p-3 text-left">Costo real</th><th className="p-3 text-right">Cuota</th></tr></thead><tbody>{(schedule||[]).map(row=><tr key={row.mes} className="border-t border-line"><td className="p-3">{row.mes}</td><td className="p-3">{money(row.valor_asegurado_mes)}</td><td className="p-3">{money(row.prima_total_mes)}</td><td className="p-3 text-right font-bold">{money(row.cuota_fija)}</td></tr>)}</tbody></table></div></section>
-  </main>;
+export const metadata: Metadata = { title: "Editar Orden de Emisión | Kuantix", robots: { index: false, follow: false } };
+
+export default async function Page({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ actualizada?: string }> }) {
+  const session = await requireChannelUser();
+  const { id } = await params;
+  const { actualizada } = await searchParams;
+  const db = createAdminClient();
+  const { data: quote } = await db
+    .from("cotizacion")
+    .select("id,estado,origen,cliente_id,producto_id,anios_vigencia,fecha_inicio_vigencia,cliente(nombre_razon_social,identificacion,email,telefono,ciudad_id,direccion,fecha_nacimiento,genero,estado_civil),vehiculo(tipo_vehiculo_id,marca,modelo,anio,color,valor_asegurado,estado_vh,uso,placa),certificado_cobertura(numero)")
+    .eq("id", id)
+    .eq("canal_id", session.channelId!)
+    .eq("origen", "CANAL")
+    .eq("estado", "PENDIENTE")
+    .maybeSingle();
+  if (!quote) notFound();
+
+  const client = one(quote.cliente);
+  const vehicle = one(quote.vehiculo);
+  if (!client || !vehicle) notFound();
+  const [{ data: coverages }, { data: cities }, formData] = await Promise.all([
+    db.from("cotizacion_cobertura").select("producto_cobertura_id").eq("cotizacion_id", id),
+    db.from("ciudad").select("id,nombre").order("nombre"),
+    getQuoteFormData(quote.cliente_id, { insurerId: session.insurerId!, channelId: session.channelId! }),
+  ]);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Guayaquil", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const initial: QuoteEditInitial = {
+    origen: "CANAL",
+    productId: quote.producto_id,
+    vehicle: {
+      typeId: vehicle.tipo_vehiculo_id ?? "", brand: vehicle.marca, model: vehicle.modelo, year: vehicle.anio ?? new Date().getFullYear(),
+      color: vehicle.color ?? "", insuredValue: Number(vehicle.valor_asegurado), status: vehicle.estado_vh, use: vehicle.uso, plate: vehicle.placa,
+    },
+    coverageIds: (coverages ?? []).map((coverage) => coverage.producto_cobertura_id),
+    durationYears: String(quote.anios_vigencia),
+    startDate: quote.fecha_inicio_vigencia ? String(quote.fecha_inicio_vigencia).slice(0, 10) : today,
+  };
+  const certificate = one(quote.certificado_cobertura);
+
+  return (
+    <main className="relative z-10 mx-auto w-full max-w-[1120px] px-4 py-8 sm:px-7 lg:px-10">
+      <Link href="/canal/cotizaciones" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-ink-muted"><ArrowLeft className="size-4" />Órdenes de Emisión</Link>
+      {actualizada === "1" && <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">La Orden de Emisión fue actualizada y el certificado corregido se envió al cliente.</p>}
+      <header className="mt-5 flex flex-col gap-4 border-b border-line pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em] text-brand-text/80"><PencilLine className="size-3.5" />Orden de Emisión pendiente</p>
+          <h1 className="mt-2 text-4xl font-bold tracking-[-0.035em]">Editar orden</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-muted">Corrige todos los datos antes de la emisión. Al guardar recalculamos la cuota y generamos el certificado actualizado.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/canal/cotizaciones/${id}/inspeccion`} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-brand/25 bg-brand/10 px-5 text-sm font-bold text-brand-text hover:bg-brand/15"><ScanLine className="size-4" />Inspección</Link>
+          {certificate && <a href={`/canal/cotizaciones/${id}/certificado`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-line bg-white px-5 text-sm font-bold hover:bg-surface-muted"><FileDown className="size-4" />Ver certificado {certificate.numero}</a>}
+        </div>
+      </header>
+      <OrderEditor quoteId={id} data={formData} initial={initial} client={{ name: client.nombre_razon_social, identification: client.identificacion ?? "", email: client.email, phone: client.telefono ?? "", cityId: client.ciudad_id, birthDate: client.fecha_nacimiento, gender: client.genero, maritalStatus: client.estado_civil, address: client.direccion }} cities={cities ?? []} />
+    </main>
+  );
 }
-function Metric({icon,label,value,detail}:{icon:React.ReactNode;label:string;value:string;detail?:string}){return <article className="glass-panel p-5"><span className="text-brand [&_svg]:size-5">{icon}</span><p className="mt-5 text-[10px] font-bold uppercase text-ink-subtle">{label}</p><p className="mt-1 text-xl font-bold">{value}</p>{detail&&<p className="mt-1 text-[11px] text-ink-subtle">{detail}</p>}</article>}
-function Detail({label,value}:{label:string;value:string}){return <div><dt className="text-[10px] font-bold uppercase text-ink-subtle">{label}</dt><dd className="mt-1 text-sm">{value}</dd></div>}
-function first<T>(value:T|T[]|null){return Array.isArray(value)?value[0]||null:value}function rel(value:unknown,key:string){const row=Array.isArray(value)?value[0]:value;return row&&typeof row==="object"&&key in row?String((row as Record<string,unknown>)[key]):"—"}function money(value:number|string){return new Intl.NumberFormat("es-EC",{style:"currency",currency:"USD"}).format(Number(value))}function date(value:string|null){return value?new Intl.DateTimeFormat("es-EC",{dateStyle:"long",timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)):"—"}
-function inspectionBadge(value:unknown):string|null{const row=first(value as {carroceria?:string;estado?:string;inspeccion_foto?:{count:number}[]}|null);if(!row||!isCarroceria(row.carroceria))return null;if(row.estado==="COMPLETADA")return "Completada";const count=Array.isArray(row.inspeccion_foto)?row.inspeccion_foto[0]?.count??0:0;return `${count}/${requiredSlots(row.carroceria).length}`}
+
+function one<T>(value: T | T[] | null) { return Array.isArray(value) ? value[0] ?? null : value; }

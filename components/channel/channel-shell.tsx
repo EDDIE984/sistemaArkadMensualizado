@@ -10,7 +10,7 @@ import type { AppSession } from "@/lib/auth/session";
 
 const items = [
   { href: "/canal", label: "Resumen", icon: ChartNoAxesCombined },
-  { href: "/canal/cotizaciones", label: "Cotizaciones", icon: Files },
+  { href: "/canal/cotizaciones", label: "Órdenes de Emisión", icon: Files },
   { href: "/canal/clientes", label: "Clientes", icon: Users },
   { href: "/canal/perfil", label: "Mi perfil", icon: UserRound },
 ];

@@ -6,11 +6,11 @@ import { requireChannelUser } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getQuoteFormData } from "@/lib/quotes/data";
 
-export const metadata: Metadata = { title: "Nueva cotización asistida | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Nueva Orden de Emisión asistida | Kuantix", robots: { index: false, follow: false } };
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ cliente?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ cliente?: string; incompleto?: string }> }) {
   const s = await requireChannelUser();
-  const { cliente } = await searchParams;
+  const { cliente, incompleto } = await searchParams;
   const db = createAdminClient();
 
   if (!cliente) {
@@ -19,7 +19,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
       db.from("ciudad").select("id,nombre").order("nombre"),
     ]);
     const clients = (links || []).map((x) => (Array.isArray(x.cliente) ? x.cliente[0] : x.cliente)).filter((c): c is NonNullable<typeof c> => Boolean(c));
-    return <NewQuoteStart clients={clients} cities={cities || []} />;
+    return <NewQuoteStart clients={clients} cities={cities || []} incompleteProfile={incompleto === "1"} />;
   }
 
   const { data: link } = await db
@@ -29,17 +29,17 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
     .eq("cliente_id", cliente)
     .maybeSingle();
   const client = first(link?.cliente || null);
-  if (!client) redirect("/canal/clientes");
+  if (!client) redirect("/canal/cotizaciones/nueva");
 
   const complete = Boolean(
     client.identificacion && client.telefono && client.ciudad_id && client.fecha_nacimiento && client.genero && client.estado_civil,
   );
-  if (!complete) redirect("/canal/clientes?incompleto=1");
+  if (!complete) redirect("/canal/cotizaciones/nueva?incompleto=1");
 
   const data = await getQuoteFormData(client.id, { insurerId: s.insurerId!, channelId: s.channelId! });
   return (
     <main className="relative z-10 mx-auto w-full max-w-[1080px] px-4 py-8 sm:px-7 lg:px-10">
-      <p className="text-xs font-bold uppercase tracking-wider text-brand-text/80">Cotización asistida</p>
+      <p className="text-xs font-bold uppercase tracking-wider text-brand-text/80">Orden de Emisión asistida</p>
       <h1 className="mt-2 text-4xl font-bold tracking-[-0.035em]">Cotizar para {client.nombre_razon_social}</h1>
       <p className="mt-2 text-sm text-ink-muted">Productos disponibles exclusivamente para tu canal y aseguradora.</p>
       <QuoteWizard data={data} mode="channel" clientId={client.id} />

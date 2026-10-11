@@ -27,9 +27,11 @@ export type QuoteFormData = {
 };
 
 export type QuoteActionState = {
-  status: "idle" | "error";
+  status: "idle" | "error" | "preview";
   message?: string;
   fields?: Record<string, string[]>;
+  /** Solo canal: vista previa del certificado (PDF en base64) antes de enviar y registrar. */
+  preview?: { pdf: string; clientName: string; email: string; phone: string | null };
 };
 
 export const initialQuoteState: QuoteActionState = { status: "idle" };

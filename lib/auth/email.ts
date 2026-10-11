@@ -1,26 +1,6 @@
 import "server-only";
 
-import nodemailer from "nodemailer";
-
-function getMailConfig() {
-  const user = process.env.SMTP_USER;
-  const password = process.env.SMTP_PASSWORD;
-  const fromEmail = process.env.SMTP_FROM_EMAIL || user;
-
-  if (!user || !password || !fromEmail) {
-    throw new Error("Falta configurar SMTP_USER, SMTP_PASSWORD o SMTP_FROM_EMAIL.");
-  }
-
-  return {
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: Number(process.env.SMTP_PORT || 465),
-    secure: process.env.SMTP_SECURE !== "false",
-    user,
-    password,
-    fromEmail,
-    fromName: process.env.SMTP_FROM_NAME || "Kuantix",
-  };
-}
+import { createMailTransport, getMailConfig } from "@/lib/mail/smtp";
 
 export async function sendActivationEmail({
   email,
@@ -34,12 +14,7 @@ export async function sendActivationEmail({
   const config = getMailConfig();
   const appUrl = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
   const activationUrl = `${appUrl}/activar-cuenta?token=${encodeURIComponent(token)}`;
-  const transporter = nodemailer.createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    auth: { user: config.user, pass: config.password },
-  });
+  const transporter = createMailTransport(config);
 
   await transporter.sendMail({
     from: `"${config.fromName}" <${config.fromEmail}>`,
@@ -71,12 +46,7 @@ export async function sendPasswordResetEmail({
   const config = getMailConfig();
   const appUrl = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
   const resetUrl = `${appUrl}/restablecer-contrasena?token=${encodeURIComponent(token)}`;
-  const transporter = nodemailer.createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    auth: { user: config.user, pass: config.password },
-  });
+  const transporter = createMailTransport(config);
 
   await transporter.sendMail({
     from: `"${config.fromName}" <${config.fromEmail}>`,

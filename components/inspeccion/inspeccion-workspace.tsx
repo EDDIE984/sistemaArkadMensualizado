@@ -219,7 +219,7 @@ function SlotBoard({
         {actor === "CANAL"
           ? "Captura las fotos con el dispositivo del cliente o el tuyo. "
           : "Puedes usar el celular o la webcam del computador. "}
-        La inspección es informativa: no cambia el estado de la cotización ni bloquea la emisión.
+        La inspección es informativa: no cambia el estado de la {actor === "CANAL" ? "Orden de Emisión" : "cotización"} ni bloquea la emisión.
       </p>
 
       {inspeccion.estado !== "COMPLETADA" && (

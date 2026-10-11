@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  // Solo desarrollo: permite abrir el servidor de dev desde cualquier IP de red
+  // local o nombre .local (sin esto Next bloquea sus scripts y la página queda
+  // sin interactividad). `*` equivale a un segmento de la IP/dominio.
+  allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.*.*.*", "*.local"],
   serverExternalPackages: ["sharp"],
   async headers() {
     return [

@@ -127,6 +127,8 @@ erDiagram
     INSPECCION ||--o{ INSPECCION_FOTO : contiene
     INSPECCION_FOTO ||--o{ INSPECCION_DANO : "detecta (análisis IA)"
     USUARIO ||--o{ INSPECCION : "revisa (opcional)"
+    COTIZACION ||--o| CERTIFICADO_COBERTURA : "certifica (canal; obligatorio al registrar)"
+    USUARIO ||--o{ CERTIFICADO_COBERTURA : envía
 
     POLIZA ||--o{ TABLA_COBRANZA : genera
     TABLA_COBRANZA ||--o{ PAGO : recibe
@@ -563,6 +565,19 @@ erDiagram
         timestamp creado_en
     }
 
+    CERTIFICADO_COBERTURA {
+        uuid id PK
+        uuid cotizacion_id FK "unique — un certificado por cotización"
+        string numero "unique, KX-AAAA-NNNNNN (secuencia certificado_cobertura_seq)"
+        string storage_path "PDF en bucket privado 'certificados'"
+        string canal_envio "CORREO|WHATSAPP"
+        string destino "correo o teléfono E.164 al que se envió"
+        string proveedor_mensaje_id "id del mensaje (SMTP message-id o WasenderAPI msgId); nullable"
+        uuid enviado_por_usuario_id FK "USUARIO de canal que registró y envió"
+        timestamp enviado_en
+        timestamp creado_en
+    }
+
     INSPECCION {
         uuid id PK
         uuid cotizacion_id FK "unique — una inspección por cotización"
@@ -852,6 +867,25 @@ vía `datos_nuevos.accion`), no cada foto ni cada daño.
    opcional). Al crearse la póliza se dispara la generación de
    `TABLA_COBRANZA` (una fila por cuota, según `anios_vigencia * 12` o el
    plan de pagos que se defina).
+   **Eliminación de cotizaciones pendientes (canal)**: el usuario de canal
+   puede eliminar físicamente una cotización asistida de su canal ("Orden de
+   Emisión" en la interfaz del canal) solo si `estado = PENDIENTE` y no tiene
+   `POLIZA`. No se marca como `RECHAZADA`: la fila se borra y, por
+   `on delete cascade`, también `COTIZACION_COBERTURA`,
+   `COTIZACION_DEDUCIBLE`, `AMORTIZACION_MENSUAL`, `INSPECCION`,
+   `INSPECCION_FOTO` e `INSPECCION_DANO`; los archivos de la inspección se
+   eliminan del bucket de Storage. El `VEHICULO` y el `CLIENTE` se conservan.
+   **Carga masiva de cotizaciones asistidas (canal)**: el usuario de canal
+   puede registrar hasta 100 cotizaciones desde una plantilla Excel. Reglas:
+   un solo `PRODUCTO` (del canal y aseguradora del usuario) para todo el
+   archivo, con todas sus `PRODUCTO_COBERTURA` activas; cada fila crea un
+   `VEHICULO` nuevo y una `COTIZACION` (`origen = CANAL`, `estado =
+   PENDIENTE`) con el mismo motor de cálculo del registro manual. Si la
+   cédula/RUC o el correo ya existen en `CLIENTE`, se **actualizan** sus datos
+   personales con los del archivo (sin tocar credenciales ni
+   `estado_registro`) y se vincula en `CANAL_CLIENTE`; si no, se crea con
+   `estado_registro = SIN_ACCESO`. El guardado es **todo o nada**: una sola
+   transacción; si alguna fila falla no se guarda ninguna.
 8. **Auditoría genérica**: la tabla `AUDITORIA` es agnóstica a la entidad
    (patrón `entidad` + `entidad_id` + JSON antes/después) para no crear una
    tabla de historial por cada entidad. Se registra al menos en: `COTIZACION`
@@ -924,8 +958,10 @@ vía `datos_nuevos.accion`), no cada foto ni cada daño.
     `AMORTIZACION_MENSUAL.comision_canal = prima_neta_mes *
     COTIZACION.comision_canal_pct`. Es **exclusivamente interno**: no modifica
     `cuota_fija_mensual`, `prima_total_mes`, `subtotal`, `iva`, impuestos ni
-    ningún número que vea el cliente; solo sirve para liquidar al canal y para
-    los indicadores del panel de la aseguradora. Un producto sin comisión
+    ningún número que vea el cliente; solo sirve para liquidar al canal, para
+    los indicadores del panel de la aseguradora y para el Resumen del propio
+    canal, que ve **solo su comisión de pólizas ya emitidas** (suma de
+    `comision_canal` de la vigencia completa, por fecha de emisión). Un producto sin comisión
     configurada usa 0. Un producto del canal `INDIVIDUAL` (autogestión) con
     `comision_canal_pct > 0` también la registra, aunque su cotización no tenga
     `canal_id`; por eso debe mantenerse en 0 salvo que se quiera reservar un
@@ -988,6 +1024,37 @@ vía `datos_nuevos.accion`), no cada foto ni cada daño.
     `CAMBIO_ESTADO` al completarse, por cada `ANALISIS_FOTO`, y en
     `APROBACION`/`RECHAZO`/`REVISION_TECNICO` vía `datos_nuevos.accion`), no por foto
     ni por daño.
+
+17. **Certificado de cobertura obligatorio (canal).** Toda cotización asistida
+    por canal genera un `CERTIFICADO_COBERTURA` en PDF que **debe enviarse al
+    cliente para que la cotización exista**: la creación de la `COTIZACION`, el
+    certificado y su envío ocurren en una sola transacción y, si el envío
+    falla, se revierte todo (no queda ni la cotización ni el certificado).
+    - Registro manual: el usuario elige `CORREO` o `WHATSAPP` (WasenderAPI,
+      verificando antes que el número exista en WhatsApp; máximo un mensaje
+      cada 7 s en toda la plataforma para proteger la cuenta).
+    - Carga masiva: siempre `CORREO`, automático y con advertencia previa. Se
+      verifica el dominio de cada correo antes de enviar; cada envío se
+      reintenta y, si uno falla definitivamente, se revierte toda la carga y se
+      informa a qué clientes ya se les envió.
+    - Los mensajes indican que son automáticos y que no se deben responder.
+    - Al eliminar una cotización pendiente se borra también el PDF del bucket.
+    - Reenvío: desde la pantalla Clientes del canal se puede reenviar el mismo
+      PDF ya emitido (por correo o WhatsApp, a los datos actuales del cliente).
+      No crea otro certificado: cada reenvío se registra en `AUDITORIA`
+      (`entidad = 'CERTIFICADO_COBERTURA'`, `accion = 'EDICION'`,
+      `datos_nuevos = {reenvio, canal, destino, mensaje_id}`) y cuenta para el
+      límite de WhatsApp.
+    - Corrección de una Orden de Emisión pendiente: el `USUARIO_CANAL` que
+      pertenece al canal de origen puede corregir los datos del titular, del
+      vehículo, producto, vigencia y coberturas. La corrección vuelve a correr
+      el motor, reemplaza los snapshots y la amortización de la `COTIZACION`,
+      y requiere regenerar y enviar el certificado. Se conserva el mismo
+      registro y número de `CERTIFICADO_COBERTURA`; sólo se reemplaza su PDF y
+      se audita la actualización. No se permite corregir una orden no
+      pendiente ni una que ya tenga póliza.
+    - El flujo de autogestión del cliente y el recálculo de la aseguradora no
+      generan certificado.
 
 ---
 
@@ -1086,7 +1153,7 @@ cálculo sin tasa.
 |---|---|
 | `ADMIN_PLATAFORMA` | Crear/editar aseguradoras, crear `ADMIN_ASEGURADORA`, ver todo el sistema |
 | `ADMIN_ASEGURADORA` | Configurar productos, canales, coberturas, cláusulas, tarifas/riesgos de **su** aseguradora; crear `USUARIO_CANAL` propios; ver cotizaciones/pólizas/cobranzas de su aseguradora |
-| `USUARIO_CANAL` | Cotizar y gestionar clientes dentro de su canal/aseguradora asignada |
+| `USUARIO_CANAL` | Cotizar y gestionar clientes dentro de su canal/aseguradora asignada; corregir sus Órdenes de Emisión pendientes y regenerar/enviar su certificado |
 | `CLIENTE` | Registrarse, cotizar (autogestión), ver sus propias cotizaciones/pólizas/cobranzas, aceptar/rechazar cotizaciones |
 
 ### 6.1 Alcance del panel `ADMIN_PLATAFORMA`

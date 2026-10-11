@@ -12,7 +12,7 @@ type LinkedClient = { id: string; nombre_razon_social: string; identificacion: s
 const EXACT = /^\d{10}(\d{3})?$/;
 const isExactTerm = (t: string) => EXACT.test(t) || t.includes("@");
 
-export function NewQuoteStart({ clients, cities }: { clients: LinkedClient[]; cities: { id: string; nombre: string }[] }) {
+export function NewQuoteStart({ clients, cities, incompleteProfile = false }: { clients: LinkedClient[]; cities: { id: string; nombre: string }[]; incompleteProfile?: boolean }) {
   const [mode, setMode] = useState<"existing" | "new">(clients.length ? "existing" : "new");
   const [query, setQuery] = useState("");
   const [globalMatch, setGlobalMatch] = useState<ClienteGlobalMatch | null>(null);
@@ -53,9 +53,10 @@ export function NewQuoteStart({ clients, cities }: { clients: LinkedClient[]; ci
 
   return (
     <main className="relative z-10 mx-auto w-full max-w-[980px] px-4 py-8 sm:px-7 lg:px-10">
-      <p className="text-xs font-bold uppercase tracking-wider text-brand-text/80">Cotización asistida</p>
-      <h1 className="mt-2 text-4xl font-bold tracking-[-0.035em]">Nueva cotización</h1>
-      <p className="mt-2 text-sm text-ink-muted">Busca un cliente ya registrado o crea uno nuevo para continuar con la cotización.</p>
+      <p className="text-xs font-bold uppercase tracking-wider text-brand-text/80">Orden de Emisión asistida</p>
+      <h1 className="mt-2 text-4xl font-bold tracking-[-0.035em]">Nueva Orden de Emisión</h1>
+      <p className="mt-2 text-sm text-ink-muted">Busca un cliente ya registrado o crea uno nuevo para continuar con la Orden de Emisión.</p>
+      {incompleteProfile && <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">El cliente elegido no tiene su perfil completo (cédula, teléfono, ciudad, nacimiento, género y estado civil). Regístralo nuevamente con todos sus datos en &quot;Cliente nuevo&quot;.</p>}
 
       <div className="mt-6 inline-flex rounded-full border border-line bg-surface-muted p-1 text-sm font-bold">
         <button

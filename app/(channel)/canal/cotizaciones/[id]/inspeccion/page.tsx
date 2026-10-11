@@ -30,7 +30,7 @@ export default async function InspeccionPage({ params }: PageProps<"/canal/cotiz
         href={`/canal/cotizaciones/${id}`}
         className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-ink-muted hover:text-ink"
       >
-        <ArrowLeft className="size-4" /> Volver a la cotización
+        <ArrowLeft className="size-4" /> Volver a la Orden de Emisión
       </Link>
       <h1 className="mt-4 text-[32px] font-bold tracking-[-0.035em] sm:text-[40px]">Inspección con IA</h1>
       <p className="mt-2 max-w-2xl text-sm text-ink-muted">

@@ -4,9 +4,10 @@ import { useActionState, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Building2, CalendarDays, CarFront, Check, Info, LoaderCircle, ShieldCheck } from "lucide-react";
 import { createQuoteAction } from "@/app/actions/quotes";
-import { createAssistedQuote } from "@/app/actions/channel";
+import { previewAssistedQuote } from "@/app/actions/channel";
+import { CertificateDialog } from "@/components/channel/certificate-dialog";
 import { recalculateQuote } from "@/app/actions/insurer";
-import { initialQuoteState, type QuoteFormData } from "@/lib/quotes/types";
+import { initialQuoteState, type QuoteActionState, type QuoteFormData } from "@/lib/quotes/types";
 
 const steps = ["Producto", "Vehículo", "Protección", "Confirmar"];
 
@@ -31,8 +32,15 @@ export type QuoteEditInitial = {
 
 export function QuoteWizard({ data, mode = "self", clientId, quoteId, initial }: { data: QuoteFormData; mode?: "self" | "channel" | "edit"; clientId?: string; quoteId?: string; initial?: QuoteEditInitial }) {
   const isEdit = mode === "edit";
-  const action0 = isEdit ? recalculateQuote : mode === "channel" ? createAssistedQuote : createQuoteAction;
+  // Para el canal la cotización se presenta como "Orden de Emisión".
+  const docName = mode === "channel" ? "Orden de Emisión" : "cotización";
+  // Canal: "Calcular" solo genera la vista previa del certificado; se guarda al enviarlo (ver CertificateDialog).
+  const [lastForm, setLastForm] = useState<FormData | null>(null);
+  const channelPreview = (prev: QuoteActionState, fd: FormData) => { setLastForm(fd); return previewAssistedQuote(prev, fd); };
+  const action0 = isEdit ? recalculateQuote : mode === "channel" ? channelPreview : createQuoteAction;
   const [state, action, pending] = useActionState(action0, initialQuoteState);
+  const [dismissedPreview, setDismissedPreview] = useState<QuoteActionState | null>(null);
+  const showCertificate = mode === "channel" && state.status === "preview" && state.preview && lastForm && dismissedPreview !== state;
   const [step, setStep] = useState(0);
   const [productId, setProductId] = useState(initial?.productId || data.products[0]?.id || "");
   const [vehicleMode, setVehicleMode] = useState<"new" | "existing">(isEdit || !data.vehicles.length ? "new" : "existing");
@@ -72,7 +80,7 @@ export function QuoteWizard({ data, mode = "self", clientId, quoteId, initial }:
       {isEdit&&<input type="hidden" name="quoteId" value={quoteId}/>}
       <div className="glass-panel overflow-hidden">
         <div className="border-b border-line px-4 py-5 sm:px-7">
-          <ol className="grid grid-cols-4 gap-2" aria-label="Progreso de la cotización">
+          <ol className="grid grid-cols-4 gap-2" aria-label={`Progreso de la ${docName}`}>
             {steps.map((label, index) => (
               <li key={label} className="relative">
                 <div className={`mb-2 h-1 rounded-full transition-colors ${index <= step ? "bg-brand" : "bg-ink/5"}`} />
@@ -120,7 +128,7 @@ export function QuoteWizard({ data, mode = "self", clientId, quoteId, initial }:
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">
                   <div className="flex gap-3 rounded-2xl border border-brand/25 bg-brand/10 p-4 text-sm leading-6 text-brand-text sm:col-span-2">
                     <Info className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden="true" />
-                    <p><strong className="text-ink">¿No encuentras la marca o el modelo?</strong> No te preocupes. La lista muestra los vehículos habilitados actualmente para cotización en línea. <Link href="/contacto" className="font-bold text-brand-text underline decoration-brand/35 underline-offset-4 hover:decoration-brand">Contáctanos</Link> y te ayudaremos a revisar tu vehículo.</p>
+                    <p><strong className="text-ink">¿No encuentras la marca o el modelo?</strong> No te preocupes. La lista muestra los vehículos habilitados actualmente para {mode === "channel" ? "Orden de Emisión" : "cotización"} en línea. <Link href="/contacto" className="font-bold text-brand-text underline decoration-brand/35 underline-offset-4 hover:decoration-brand">Contáctanos</Link> y te ayudaremos a revisar tu vehículo.</p>
                   </div>
                   <Field label="Tipo de vehículo" error={state.fields?.vehicleTypeId?.[0]}><select name="vehicleTypeId" value={vehicleTypeId} onChange={(e) => setVehicleTypeId(e.target.value)} className={inputClass}><option value="">Selecciona</option>{product.vehicleTypes.map((item) => <option key={item.id} value={item.id}>{friendlyVehicleType(item.description)}</option>)}</select></Field>
                   <Field label="Marca" error={state.fields?.brand?.[0]}><select name="brand" value={brand} onChange={(e) => { const next = e.target.value; setBrand(next); setModel(product.models.find((item) => item.brand === next)?.model || ""); }} className={inputClass}><option value="">Selecciona</option>{brands.map((item) => <option key={item}>{item}</option>)}</select></Field>
@@ -152,19 +160,20 @@ export function QuoteWizard({ data, mode = "self", clientId, quoteId, initial }:
                 <Summary label="Producto" value={`${product.name} · ${product.insurerName}`} />
                 <Summary label="Vehículo" value={vehicleMode === "existing" && vehicle ? `${vehicle.brand} ${vehicle.model}` : `${brand} ${model}`} />
                 <Summary label="Vigencia" value={`${duration} ${duration === "1" ? "año" : "años"}`} />
-                <Summary label="Modalidad" value={isEdit?"Recálculo por la aseguradora":mode==="channel"?"Cotización asistida por canal":"Cotización individual en autogestión"} />
+                <Summary label="Modalidad" value={isEdit?"Recálculo por la aseguradora":mode==="channel"?"Orden de Emisión asistida por canal":"Cotización individual en autogestión"} />
                 {vigenciaEditable&&<><Summary label="Inicio de vigencia" value={formatDate(startDate)}/><Summary label="Fin de vigencia" value={formatDate(coverageEndDate)}/><Summary label="Días de cobertura" value={String(coverageDays)}/><Summary label="Cuotas completas" value={String(Number(duration)*12)}/></>}
               </dl>
-              <p className="mt-5 text-xs leading-5 text-ink-subtle">{isEdit ? "El recálculo re-corre el motor con la parametrización vigente del producto (tasas, depreciación y comisión del canal) y reemplaza el cronograma. La cotización sigue pendiente." : "El valor final depende de tus datos personales, el vehículo y la configuración vigente del producto. Esta cotización no constituye todavía una póliza."}</p>
-              {!isEdit && <p className="mt-3 text-xs leading-5 text-ink-subtle">Después de guardar podrás realizar la inspección fotográfica del vehículo desde el detalle de la cotización.</p>}
+              <p className="mt-5 text-xs leading-5 text-ink-subtle">{isEdit ? "El recálculo re-corre el motor con la parametrización vigente del producto (tasas, depreciación y comisión del canal) y reemplaza el cronograma. La cotización sigue pendiente." : "El valor final depende de tus datos personales, el vehículo y la configuración vigente del producto. Esta " + docName + " no constituye todavía una póliza."}</p>
+              {!isEdit && <p className="mt-3 text-xs leading-5 text-ink-subtle">Después de guardar podrás realizar la inspección fotográfica del vehículo desde el detalle de la {docName}.</p>}
           </section>
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-4 sm:px-7">
           <button type="button" onClick={() => setStep((value) => Math.max(0, value - 1))} disabled={step === 0 || pending} className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold text-ink-muted hover:bg-ink/5 disabled:invisible"><ArrowLeft className="size-4" /> Atrás</button>
-          {step < steps.length - 1 ? <button type="button" onClick={() => setStep((value) => Math.min(steps.length - 1, value + 1))} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-ink px-5 text-sm font-bold text-white hover:opacity-90">Continuar <ArrowRight className="size-4" /></button> : <button type="submit" disabled={pending} className="inline-flex min-h-12 items-center gap-2 rounded-full bg-brand px-6 text-sm font-bold text-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">{pending ? <LoaderCircle className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}{pending ? (isEdit ? "Recalculando…" : "Calculando…") : (isEdit ? "Recalcular cotización" : "Calcular cotización")}</button>}
+          {step < steps.length - 1 ? <button type="button" onClick={() => setStep((value) => Math.min(steps.length - 1, value + 1))} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-ink px-5 text-sm font-bold text-white hover:opacity-90">Continuar <ArrowRight className="size-4" /></button> : <button type="submit" disabled={pending} className="inline-flex min-h-12 items-center gap-2 rounded-full bg-brand px-6 text-sm font-bold text-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">{pending ? <LoaderCircle className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}{pending ? (isEdit ? "Recalculando…" : "Calculando…") : (isEdit ? "Recalcular cotización" : `Calcular ${docName}`)}</button>}
         </div>
       </div>
+      {showCertificate && <CertificateDialog preview={state.preview!} formData={lastForm!} onCancel={() => setDismissedPreview(state)} />}
     </form>
   );
 }
