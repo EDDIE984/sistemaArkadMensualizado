@@ -6,7 +6,7 @@ import { requireChannelUser } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getQuoteFormData } from "@/lib/quotes/data";
 
-export const metadata: Metadata = { title: "Nueva cotización asistida | Arkad", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Nueva cotización asistida | Kuantix", robots: { index: false, follow: false } };
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ cliente?: string }> }) {
   const s = await requireChannelUser();
@@ -39,9 +39,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
   const data = await getQuoteFormData(client.id, { insurerId: s.insurerId!, channelId: s.channelId! });
   return (
     <main className="relative z-10 mx-auto w-full max-w-[1080px] px-4 py-8 sm:px-7 lg:px-10">
-      <p className="text-xs font-bold uppercase tracking-wider text-cyan-100/65">Cotización asistida</p>
+      <p className="text-xs font-bold uppercase tracking-wider text-brand-text/80">Cotización asistida</p>
       <h1 className="mt-2 text-4xl font-bold tracking-[-0.035em]">Cotizar para {client.nombre_razon_social}</h1>
-      <p className="mt-2 text-sm text-white/58">Productos disponibles exclusivamente para tu canal y aseguradora.</p>
+      <p className="mt-2 text-sm text-ink-muted">Productos disponibles exclusivamente para tu canal y aseguradora.</p>
       <QuoteWizard data={data} mode="channel" clientId={client.id} />
     </main>
   );

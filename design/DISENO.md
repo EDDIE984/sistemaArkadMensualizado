@@ -327,14 +327,35 @@ No hay breakpoint intermedio para tablet; salta directo de desktop a este único
 # Pantallas internas autenticadas
 
 El diseño del login conserva su video y composición actuales. Todas las rutas
-que se muestran después de iniciar sesión deben usar como fondo global el asset
-real `public/images/internal-app-background.png`; no se debe recrear mediante
-CSS ni sustituir por un degradado generado.
+que se muestran después de iniciar sesión (y las de activar cuenta /
+restablecer contraseña) usan un **tema claro, fondo blanco**, con el asset
+`public/images/internal-app-background-light.webp` (clase `.internal-background`):
+el mismo vehículo y líneas de la versión oscura, redibujados en trazos navy/teal
+sobre blanco. El PNG oscuro original (`internal-app-background.png`) se conserva
+solo como fuente.
+
+Paleta (tomada del logotipo Kuantix, tokens en `app/globals.css`):
+
+| Token Tailwind | Valor | Uso |
+|---|---|---|
+| `brand` | `#02C7B3` | acentos, íconos, botones secundarios (texto `ink`) |
+| `brand-strong` | `#00A898` | hover de `brand` |
+| `brand-text` | `#00897B` | texto/enlaces teal sobre blanco (contraste AA) |
+| `ink` | `#173250` | texto principal, títulos, botón primario (texto blanco) |
+| `ink-strong` | `#0F2440` | hover de `ink` |
+| `ink-muted` | `#5B6B7F` | texto secundario |
+| `ink-subtle` | `#74839A` | etiquetas y texto terciario |
+| `surface` / `surface-muted` | `#FFFFFF` / `#F5F8FB` | paneles / zonas internas y campos |
+| `line` | `#E3E9F0` | bordes y divisores |
+
+Estados: `emerald`, `amber`, `red`, `rose` en versión clara (fondo `-50`,
+borde `-200`, texto `-700`). No se usan clases `text-white/…`, `border-white/…`
+ni fondos `#061323`/`#071426` en pantallas internas.
 
 Reglas obligatorias:
 
 - La marca visible en el encabezado compartido de todas las pantallas internas
-  autenticadas es **Arkad**, acompañada por el ícono de escudo aprobado. No se
+  autenticadas es **Kuantix**, representada por su logotipo (`components/brand/kuantix-logo.tsx`). No se
   debe mostrar “Confia” en esta posición. Esta regla se limita al encabezado
   interno y no implica reemplazar automáticamente otros textos comerciales,
   legales o metadatos de la aplicación.
@@ -343,8 +364,8 @@ Reglas obligatorias:
 - En móvil se reposiciona para priorizar el contenido y evitar que el vehículo
   interfiera con formularios, tablas o navegación.
 - Tarjetas, formularios, tablas y paneles usan glassmorphism moderado: superficie
-  oscura semitransparente, blur contenido, borde claro sutil, sombra suave y
-  contraste suficiente.
+  blanca semitransparente (`.glass-panel`), blur contenido, borde `line`,
+  sombra navy muy suave y contraste suficiente.
 - No se reduce simplemente la interfaz de escritorio: las grillas se convierten
   en una columna cuando corresponde, los paneles ocupan casi todo el ancho útil,
   no existe scroll horizontal y los controles táctiles miden al menos 44 px.

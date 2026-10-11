@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 const control =
-  "min-h-11 min-w-0 rounded-xl border border-white/15 bg-[#061323]/65 px-3.5 text-sm text-white outline-none focus:border-cyan-100/55 [color-scheme:dark]";
+  "min-h-11 min-w-0 rounded-xl border border-line bg-white px-3.5 text-sm text-ink outline-none focus:border-brand/60 [color-scheme:light]";
 
 const RANGOS: { value: string; label: string }[] = [
   { value: "hoy", label: "Diario" },
@@ -32,8 +32,8 @@ export function InspeccionFiltros({ selected }: { selected: Selected }) {
               href={`/aseguradora/inspecciones?rango=${r.value}`}
               className={`inline-flex min-h-9 items-center rounded-full border px-4 text-xs font-bold ${
                 active
-                  ? "border-cyan-100/40 bg-cyan-100/12 text-cyan-50"
-                  : "border-white/14 bg-white/5 text-white/60 hover:bg-white/10"
+                  ? "border-brand/60 bg-brand/15 text-brand-text"
+                  : "border-line bg-surface-muted text-ink-muted hover:bg-ink/5"
               }`}
             >
               {r.label}
@@ -44,8 +44,8 @@ export function InspeccionFiltros({ selected }: { selected: Selected }) {
           href="/aseguradora/inspecciones?rango=todo"
           className={`inline-flex min-h-9 items-center rounded-full border px-4 text-xs font-bold ${
             !selected.rango || selected.rango === "todo"
-              ? "border-cyan-100/40 bg-cyan-100/12 text-cyan-50"
-              : "border-white/14 bg-white/5 text-white/60 hover:bg-white/10"
+              ? "border-brand/60 bg-brand/15 text-brand-text"
+              : "border-line bg-surface-muted text-ink-muted hover:bg-ink/5"
           }`}
         >
           Todo
@@ -54,15 +54,15 @@ export function InspeccionFiltros({ selected }: { selected: Selected }) {
 
       <form className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <label className="grid gap-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Desde</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Desde</span>
           <input type="date" name="desde" defaultValue={selected.desde ?? ""} className={control} />
         </label>
         <label className="grid gap-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Hasta</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Hasta</span>
           <input type="date" name="hasta" defaultValue={selected.hasta ?? ""} className={control} />
         </label>
         <label className="grid gap-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Revisión</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Revisión</span>
           <select name="revision" defaultValue={selected.revision ?? ""} className={control}>
             <option value="">Todas</option>
             <option value="PENDIENTE">Pendiente</option>
@@ -71,7 +71,7 @@ export function InspeccionFiltros({ selected }: { selected: Selected }) {
           </select>
         </label>
         <label className="grid gap-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Placa</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Placa</span>
           <input
             name="placa"
             defaultValue={selected.placa ?? ""}
@@ -81,13 +81,13 @@ export function InspeccionFiltros({ selected }: { selected: Selected }) {
           />
         </label>
         <div className="flex gap-2">
-          <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-white px-5 text-sm font-bold text-[#071426]">
+          <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 text-sm font-bold text-white">
             Aplicar
           </button>
           {dirty && (
             <Link
               href="/aseguradora/inspecciones"
-              className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/14 px-5 text-sm font-bold text-white/70"
+              className="inline-flex min-h-11 items-center justify-center rounded-full border border-line px-5 text-sm font-bold text-ink/80"
             >
               Limpiar
             </Link>

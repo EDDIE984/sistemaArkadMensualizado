@@ -6,7 +6,7 @@ export function Hero() {
     <section className="relative w-full h-screen overflow-hidden flex flex-col bg-[#0a0a0a]">
       <div className="absolute inset-0 w-full h-full overflow-hidden animate-[zoomFade_1.6s_ease-out_both]">
         <video
-          src="https://res.cloudinary.com/urml6fcu/video/upload/kling_20260810_Image_to_Video_Hand_holdi_2841_0.mp4"
+          src="https://res.cloudinary.com/urml6fcu/video/upload/v1791735886/kuantix.mp4"
           autoPlay
           loop
           muted

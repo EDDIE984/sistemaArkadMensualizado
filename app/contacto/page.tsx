@@ -3,9 +3,9 @@ import { Clock3, Mail, MapPin, Phone } from "lucide-react";
 import { SiteNav } from "@/components/site-nav";
 
 export const metadata: Metadata = {
-  title: "Contacto | Confia",
+  title: "Contacto | Kuantix",
   description:
-    "Comunícate con Confia para recibir información sobre seguros vehiculares, planes mensuales y alternativas de protección.",
+    "Comunícate con Kuantix para recibir información sobre seguros vehiculares, planes mensuales y alternativas de protección.",
 };
 
 const contactItems = [

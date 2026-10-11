@@ -6,7 +6,7 @@ import { AdminPage } from "@/components/admin/admin-ui";
 import { requireInsurerAdmin } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const metadata: Metadata = { title: "Detalle del cálculo | Arkad", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Detalle del cálculo | Kuantix", robots: { index: false, follow: false } };
 
 type Amort = {
   mes: number;
@@ -74,18 +74,18 @@ export default async function CalculoDetalle({
       description="Amortización mensual completa: prima neta, comisión del canal, impuestos y nivelación de la cuota."
     >
       <div className="mt-2 flex flex-wrap items-center gap-4">
-        <Link href="/aseguradora/operacion" className="inline-flex min-h-10 items-center gap-2 text-sm font-bold text-cyan-100">
+        <Link href="/aseguradora/operacion" className="inline-flex min-h-10 items-center gap-2 text-sm font-bold text-brand-text">
           <ArrowLeft className="size-4" /> Volver a Operación
         </Link>
         {quote.estado === "PENDIENTE" && (
-          <Link href={`/aseguradora/operacion/${id}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-white/15 px-3.5 text-xs font-bold text-white/75 hover:bg-white/8">
+          <Link href={`/aseguradora/operacion/${id}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3.5 text-xs font-bold text-ink/80 hover:bg-ink/5">
             Editar y recalcular
           </Link>
         )}
       </div>
 
       {recalculado === "1" && (
-        <p className="mt-6 flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm text-emerald-50">
+        <p className="mt-6 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           <CheckCircle2 className="size-4" /> Cotización recalculada. Este es el nuevo cronograma.
         </p>
       )}
@@ -108,28 +108,28 @@ export default async function CalculoDetalle({
       {coverages && coverages.length > 0 && (
         <section className="mt-4 flex flex-wrap gap-2">
           {coverages.map((c, i) => (
-            <span key={i} className="rounded-full border border-white/12 bg-white/5 px-3 py-1.5 text-xs text-white/70">
+            <span key={i} className="rounded-full border border-line bg-surface-muted px-3 py-1.5 text-xs text-ink/80">
               {nested(c.producto_cobertura, "cobertura_base", "nombre")}
-              {c.valor_aplicado != null && <span className="ml-1.5 text-white/45">· {String(c.valor_aplicado)}</span>}
+              {c.valor_aplicado != null && <span className="ml-1.5 text-ink-subtle">· {String(c.valor_aplicado)}</span>}
             </span>
           ))}
         </section>
       )}
 
       <section className="glass-panel mt-4 overflow-hidden">
-        <header className="border-b border-white/10 p-5">
+        <header className="border-b border-line p-5">
           <h2 className="font-bold">Amortización mensual ({rows.length} cuotas)</h2>
-          <p className="mt-1 text-xs text-white/45">Todos los importes en USD. La comisión del canal es interna y no altera la cuota del cliente.</p>
+          <p className="mt-1 text-xs text-ink-subtle">Todos los importes en USD. La comisión del canal es interna y no altera la cuota del cliente.</p>
         </header>
         <div className="overflow-x-auto">
           <table className="min-w-full text-right text-xs">
-            <thead className="text-[10px] uppercase tracking-wider text-white/40">
+            <thead className="text-[10px] uppercase tracking-wider text-ink-subtle">
               <tr>
                 <th className="px-3 py-3 text-left">Mes</th>
                 <th className="px-3 py-3 text-left">Vencimiento</th>
                 <th className="px-3 py-3">Valor asegurado</th>
                 <th className="px-3 py-3">Prima neta</th>
-                <th className="px-3 py-3 text-cyan-100/70">Comisión canal</th>
+                <th className="px-3 py-3 text-brand-text/80">Comisión canal</th>
                 <th className="px-3 py-3">Super Bancos</th>
                 <th className="px-3 py-3">Seg. Campesino</th>
                 <th className="px-3 py-3">Der. emisión</th>
@@ -141,37 +141,37 @@ export default async function CalculoDetalle({
                 <th className="px-3 py-3">Nivelación acum.</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/8">
+            <tbody className="divide-y divide-line">
               {rows.map((r) => (
                 <tr key={r.mes}>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-left font-semibold text-white/75">{r.mes}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-left text-white/72">{dueDate(quote.fecha_inicio_vigencia, r.mes)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-white/72">{money(r.valor_asegurado_mes)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-white/72">{money(r.prima_neta_mes)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-cyan-100/90">{money(r.comision_canal)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-white/72">{money(r.super_bancos)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-white/72">{money(r.seguro_campesino)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-white/72">{money(r.derechos_emision)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-white/72">{money(r.subtotal)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-white/72">{money(r.iva)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-white/85">{money(r.prima_total_mes)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-white/72">{money(r.cuota_fija)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-white/55">{money(r.diferencia)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-white/55">{money(r.nivelacion_acumulada)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-left font-semibold text-ink/80">{r.mes}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-left text-ink/80">{dueDate(quote.fecha_inicio_vigencia, r.mes)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-ink/80">{money(r.valor_asegurado_mes)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-ink/80">{money(r.prima_neta_mes)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-brand-text">{money(r.comision_canal)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-ink/80">{money(r.super_bancos)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-ink/80">{money(r.seguro_campesino)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-ink/80">{money(r.derechos_emision)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-ink/80">{money(r.subtotal)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-ink/80">{money(r.iva)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-ink">{money(r.prima_total_mes)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-ink/80">{money(r.cuota_fija)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">{money(r.diferencia)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">{money(r.nivelacion_acumulada)}</td>
                 </tr>
               ))}
               {!rows.length && (
-                <tr><td colSpan={14} className="px-3 py-8 text-center text-white/45">Esta cotización no tiene cronograma calculado.</td></tr>
+                <tr><td colSpan={14} className="px-3 py-8 text-center text-ink-subtle">Esta cotización no tiene cronograma calculado.</td></tr>
               )}
             </tbody>
             {rows.length > 0 && (
-              <tfoot className="border-t-2 border-white/15 text-[11px] font-bold text-white/80">
+              <tfoot className="border-t-2 border-line text-[11px] font-bold text-ink">
                 <tr>
-                  <td className="px-3 py-3 text-left uppercase tracking-wider text-white/45">Totales</td>
+                  <td className="px-3 py-3 text-left uppercase tracking-wider text-ink-subtle">Totales</td>
                   <td className="px-3 py-3">—</td>
                   <td className="px-3 py-3">—</td>
                   <td className="px-3 py-3">{money(totals.prima_neta_mes)}</td>
-                  <td className="px-3 py-3 text-cyan-100/90">{money(totals.comision_canal)}</td>
+                  <td className="px-3 py-3 text-brand-text">{money(totals.comision_canal)}</td>
                   <td className="px-3 py-3">{money(totals.super_bancos)}</td>
                   <td className="px-3 py-3">{money(totals.seguro_campesino)}</td>
                   <td className="px-3 py-3">{money(totals.derechos_emision)}</td>
@@ -193,10 +193,10 @@ export default async function CalculoDetalle({
 
 function Info({ label, value, detail, highlight = false }: { label: string; value: string; detail?: string; highlight?: boolean }) {
   return (
-    <article className={`glass-panel min-w-0 p-4 ${highlight ? "border border-amber-200/30" : ""}`}>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-white/42">{label}</p>
+    <article className={`glass-panel min-w-0 p-4 ${highlight ? "border border-amber-200" : ""}`}>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-ink-subtle">{label}</p>
       <p className="mt-2 break-words text-lg font-bold tracking-[-0.02em]">{value}</p>
-      {detail && <p className="mt-1 text-xs text-white/45">{detail}</p>}
+      {detail && <p className="mt-1 text-xs text-ink-subtle">{detail}</p>}
     </article>
   );
 }

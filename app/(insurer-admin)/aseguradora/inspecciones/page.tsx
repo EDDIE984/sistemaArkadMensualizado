@@ -8,7 +8,7 @@ import { loadInspeccionesListForInsurer, type InspeccionFiltro } from "@/lib/ins
 import { CARROCERIA_LABELS } from "@/lib/inspeccion/slots";
 import { SEV_COLOR, SEVERIDAD_LABEL } from "@/lib/inspeccion/labels";
 
-export const metadata: Metadata = { title: "Inspecciones | Arkad", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Inspecciones | Kuantix", robots: { index: false, follow: false } };
 
 function rangoToFechas(rango: string | undefined): { desde: string | null; hasta: string | null } {
   const hoy = new Date();
@@ -71,31 +71,31 @@ export default async function InspeccionesPage({ searchParams }: PageProps<"/ase
       <section className="glass-panel mt-4 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead className="text-[10px] uppercase tracking-wider text-white/40">
+            <thead className="text-[10px] uppercase tracking-wider text-ink-subtle">
               <tr>
                 {["Vehículo", "Carrocería", "Análisis", "Revisión", "Daños", "Gravedad", "Completada", "Creado por"].map((h) => (
                   <th key={h} className="px-3 py-3">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/8">
+            <tbody className="divide-y divide-line">
               {items.map((it) => (
-                <tr key={it.id} className="hover:bg-white/[0.03]">
+                <tr key={it.id} className="hover:bg-surface-muted">
                   <td className="px-3 py-3">
                     <Link href={`/aseguradora/inspecciones/${it.id}`} className="flex items-center gap-3">
                       {it.miniaturaUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={it.miniaturaUrl} alt="" className="size-10 rounded-lg object-cover" />
                       ) : (
-                        <span className="size-10 rounded-lg bg-white/8" />
+                        <span className="size-10 rounded-lg bg-ink/5" />
                       )}
-                      <span className="font-bold text-cyan-100">{it.placa || "Sin placa"}</span>
+                      <span className="font-bold text-brand-text">{it.placa || "Sin placa"}</span>
                     </Link>
                   </td>
-                  <td className="px-3 py-3 text-white/72">{CARROCERIA_LABELS[it.carroceria]}</td>
+                  <td className="px-3 py-3 text-ink/80">{CARROCERIA_LABELS[it.carroceria]}</td>
                   <td className="px-3 py-3">{analisisLabel(it.analisisEstado, it.danosTotal)}</td>
                   <td className="px-3 py-3">{revisionBadge(it.estadoRevision)}</td>
-                  <td className="px-3 py-3 text-white/72">{it.danosTotal}</td>
+                  <td className="px-3 py-3 text-ink/80">{it.danosTotal}</td>
                   <td className="px-3 py-3">
                     {it.gravedadPeor ? (
                       <span
@@ -109,18 +109,18 @@ export default async function InspeccionesPage({ searchParams }: PageProps<"/ase
                         {SEVERIDAD_LABEL[it.gravedadPeor]}
                       </span>
                     ) : (
-                      <span className="text-white/35">—</span>
+                      <span className="text-ink-subtle">—</span>
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-white/55">
+                  <td className="whitespace-nowrap px-3 py-3 text-ink-muted">
                     {it.completadaEn ? new Date(it.completadaEn).toLocaleDateString("es-EC") : "—"}
                   </td>
-                  <td className="px-3 py-3 text-white/55">{it.creadoPor}</td>
+                  <td className="px-3 py-3 text-ink-muted">{it.creadoPor}</td>
                 </tr>
               ))}
               {!items.length && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-10 text-center text-white/45">
+                  <td colSpan={8} className="px-3 py-10 text-center text-ink-subtle">
                     No hay inspecciones completadas con estos filtros.
                   </td>
                 </tr>
@@ -145,12 +145,12 @@ function Stat({
   tone?: "amber" | "emerald" | "rose";
 }) {
   const color =
-    tone === "amber" ? "text-amber-200" : tone === "emerald" ? "text-emerald-200" : tone === "rose" ? "text-rose-200" : "text-cyan-100";
+    tone === "amber" ? "text-amber-700" : tone === "emerald" ? "text-emerald-700" : tone === "rose" ? "text-rose-600" : "text-brand-text";
   return (
     <article className="glass-panel min-w-0 p-5">
       <span className={`${color} [&_svg]:size-5`}>{icon}</span>
       <p className="mt-6 text-3xl font-bold tracking-[-0.04em]">{value}</p>
-      <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-white/42">{label}</p>
+      <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-ink-subtle">{label}</p>
     </article>
   );
 }
@@ -159,13 +159,13 @@ function pill(text: string, tone: string) {
   return <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${tone}`}>{text}</span>;
 }
 function analisisLabel(estado: string, danos: number) {
-  if (estado === "COMPLETADO") return pill(danos ? `${danos} daño(s)` : "Sin daños", "border-white/15 bg-white/6 text-white/60");
-  if (estado === "EN_PROCESO") return pill("Analizando", "border-cyan-100/25 bg-cyan-100/10 text-cyan-50");
-  if (estado === "CON_ERRORES") return pill("Con errores", "border-rose-300/25 bg-rose-300/10 text-rose-100");
-  return pill("Pendiente", "border-white/15 bg-white/6 text-white/50");
+  if (estado === "COMPLETADO") return pill(danos ? `${danos} daño(s)` : "Sin daños", "border-line bg-surface-muted text-ink-muted");
+  if (estado === "EN_PROCESO") return pill("Analizando", "border-brand/25 bg-brand/10 text-brand-text");
+  if (estado === "CON_ERRORES") return pill("Con errores", "border-rose-200 bg-rose-50 text-rose-700");
+  return pill("Pendiente", "border-line bg-surface-muted text-ink-subtle");
 }
 function revisionBadge(estado: string) {
-  if (estado === "APROBADA") return pill("Aprobada", "border-emerald-300/25 bg-emerald-300/10 text-emerald-100");
-  if (estado === "RECHAZADA") return pill("Rechazada", "border-rose-300/25 bg-rose-300/10 text-rose-100");
-  return pill("Pendiente", "border-amber-200/25 bg-amber-200/10 text-amber-100");
+  if (estado === "APROBADA") return pill("Aprobada", "border-emerald-200 bg-emerald-50 text-emerald-700");
+  if (estado === "RECHAZADA") return pill("Rechazada", "border-rose-200 bg-rose-50 text-rose-700");
+  return pill("Pendiente", "border-amber-200 bg-amber-50 text-amber-700");
 }

@@ -3,9 +3,9 @@ import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 
 export const metadata: Metadata = {
-  title: "Nosotros | Confia",
+  title: "Nosotros | Kuantix",
   description:
-    "Conoce cómo Confia simplifica la búsqueda y comparación de seguros vehiculares para ayudarte a elegir con mayor claridad.",
+    "Conoce cómo Kuantix simplifica la búsqueda y comparación de seguros vehiculares para ayudarte a elegir con mayor claridad.",
 };
 
 export default function AboutPage() {
@@ -39,7 +39,7 @@ export default function AboutPage() {
         </h1>
 
         <p className="m-0 max-w-[560px] text-[15.5px] font-normal leading-[1.55] text-white/75 animate-[fadeUp_0.9s_cubic-bezier(0.16,1,0.3,1)_0.58s_both]">
-          En Confia acercamos a las personas a distintas alternativas de seguro vehicular en un solo lugar. Simplificamos la comparación y presentamos la información de forma clara para que cada cliente pueda encontrar una opción acorde con su vehículo y sus necesidades.
+          En Kuantix acercamos a las personas a distintas alternativas de seguro vehicular en un solo lugar. Simplificamos la comparación y presentamos la información de forma clara para que cada cliente pueda encontrar una opción acorde con su vehículo y sus necesidades.
         </p>
 
         <div className="flex items-center gap-3.5 max-[860px]:flex-wrap animate-[fadeUp_0.9s_cubic-bezier(0.16,1,0.3,1)_0.7s_both]">

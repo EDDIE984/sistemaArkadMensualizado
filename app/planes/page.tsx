@@ -4,7 +4,7 @@ import { ArrowRight, Check } from "lucide-react";
 import { SiteNav } from "@/components/site-nav";
 
 export const metadata: Metadata = {
-  title: "Planes de seguro vehicular | Confia",
+  title: "Planes de seguro vehicular | Kuantix",
   description:
     "Conoce planes mensuales referenciales para proteger tu vehículo y elige el nivel de respaldo que se ajusta a ti.",
 };

@@ -6,9 +6,9 @@ import { LoginBgVideo } from "@/components/auth/login-bg-video";
 import { getSession, sessionHome } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
-  title: "Iniciar sesión | Confia",
+  title: "Iniciar sesión | Kuantix",
   description:
-    "Accede a Confia para consultar y gestionar tus alternativas de seguro vehicular.",
+    "Accede a Kuantix para consultar y gestionar tus alternativas de seguro vehicular.",
 };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {

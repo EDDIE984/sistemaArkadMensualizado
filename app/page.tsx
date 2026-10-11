@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Hero } from "@/components/sections/hero";
 
 export const metadata: Metadata = {
-  title: "Seguro vehicular mensual | Confia",
+  title: "Seguro vehicular mensual | Kuantix",
   description:
     "Compara planes mensuales de seguro vehicular y encuentra una alternativa de protección acorde con tu auto y tus necesidades.",
 };

@@ -32,19 +32,19 @@ export function ProfileForm({ cities, profile }: { cities: City[]; profile: Clie
 
   return (
     <form action={action} className="glass-panel mt-7 grid gap-5 p-5 sm:grid-cols-2 sm:p-7">
-      {state.message && <p className="rounded-xl border border-red-300/25 bg-red-300/10 px-4 py-3 text-sm text-red-50 sm:col-span-2" role="alert">{state.message}</p>}
+      {state.message && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 sm:col-span-2" role="alert">{state.message}</p>}
       <Field label="Cédula o RUC" name="identification" error={state.fields?.identification?.[0]}>
         <input id="identification" name="identification" inputMode="numeric" required defaultValue={profile.identificacion || ""} placeholder="10 o 13 dígitos" onChange={(e) => runLookup(e.target.value)} onBlur={(e) => runLookup(e.target.value)} className={inputClass} />
         {lookupStatus === "loading" && (
-          <span className="mt-2 flex items-center gap-1.5 text-xs text-white/60">
+          <span className="mt-2 flex items-center gap-1.5 text-xs text-ink-muted">
             <LoaderCircle className="size-3 animate-spin" />Consultando cédula…
           </span>
         )}
         {lookupStatus === "not-found" && (
-          <span className="mt-2 block text-xs text-amber-200">No encontramos datos para esta cédula. Ingresa los datos manualmente.</span>
+          <span className="mt-2 block text-xs text-amber-700">No encontramos datos para esta cédula. Ingresa los datos manualmente.</span>
         )}
         {lookupStatus === "error" && (
-          <span className="mt-2 block text-xs text-red-200">No pudimos consultar el servicio. Ingresa los datos manualmente.</span>
+          <span className="mt-2 block text-xs text-red-600">No pudimos consultar el servicio. Ingresa los datos manualmente.</span>
         )}
       </Field>
       <Field label="Teléfono" name="phone" error={state.fields?.phone?.[0]}>
@@ -70,11 +70,11 @@ export function ProfileForm({ cities, profile }: { cities: City[]; profile: Clie
         </select>
       </Field>
       <div className="sm:col-span-2">
-        <label htmlFor="address" className="mb-2 block text-sm font-semibold">Dirección <span className="font-normal text-white/50">(opcional)</span></label>
+        <label htmlFor="address" className="mb-2 block text-sm font-semibold">Dirección <span className="font-normal text-ink-subtle">(opcional)</span></label>
         <textarea id="address" name="address" rows={3} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Tu dirección" className={`${inputClass} resize-none py-3`} />
       </div>
       <div className="flex justify-end sm:col-span-2">
-        <button type="submit" disabled={pending} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-6 text-sm font-semibold text-[#071426] hover:opacity-90 disabled:cursor-wait disabled:opacity-65 sm:w-auto">
+        <button type="submit" disabled={pending} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-ink px-6 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-wait disabled:opacity-65 sm:w-auto">
           {pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{pending ? "Guardando…" : "Guardar perfil"}
         </button>
       </div>
@@ -83,7 +83,7 @@ export function ProfileForm({ cities, profile }: { cities: City[]; profile: Clie
 }
 
 function Field({ label, name, error, children }: { label: string; name: string; error?: string; children: React.ReactNode }) {
-  return <div><label htmlFor={name} className="mb-2 block text-sm font-semibold">{label}</label>{children}{error && <p className="mt-1.5 text-xs text-red-200">{error}</p>}</div>;
+  return <div><label htmlFor={name} className="mb-2 block text-sm font-semibold">{label}</label>{children}{error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}</div>;
 }
 
-const inputClass = "min-h-12 w-full rounded-xl border border-white/18 bg-[#061323]/55 px-4 text-sm text-white outline-none transition-colors placeholder:text-white/40 focus:border-cyan-100/60 focus:bg-[#061323]/75 [color-scheme:dark]";
+const inputClass = "min-h-12 w-full rounded-xl border border-line bg-surface-muted px-4 text-sm text-ink outline-none transition-colors placeholder:text-ink-subtle focus:border-brand/60 focus:bg-white [color-scheme:light]";

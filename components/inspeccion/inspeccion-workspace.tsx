@@ -40,7 +40,7 @@ type Props = {
   inspeccion: InspeccionView | null;
 };
 
-const panel = "rounded-2xl border border-white/12 bg-[#05121f]/60 backdrop-blur";
+const panel = "rounded-2xl border border-line bg-surface-muted backdrop-blur";
 
 export function InspeccionWorkspace({ cotizacionId, actor, vehiculo, inspeccion }: Props) {
   const vehicleLabel = [vehiculo.marca, vehiculo.modelo, vehiculo.anio].filter(Boolean).join(" ") || "tu vehículo";
@@ -64,12 +64,12 @@ function CarroceriaPicker({ cotizacionId, vehicleLabel }: { cotizacionId: string
       <input type="hidden" name="cotizacionId" value={cotizacionId} />
       <input type="hidden" name="carroceria" value={carroceria} />
       <h2 className="text-lg font-bold">Selecciona la carrocería</h2>
-      <p className="mt-1 text-sm text-white/60">
+      <p className="mt-1 text-sm text-ink-muted">
         Elige la forma que más se parece a {vehicleLabel}. Con esto definimos qué fotos pedirte.
       </p>
 
       {state.status === "error" && state.message && (
-        <p className="mt-4 rounded-xl border border-red-300/25 bg-red-300/10 px-4 py-3 text-sm text-red-50" role="alert">
+        <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
           {state.message}
         </p>
       )}
@@ -81,7 +81,7 @@ function CarroceriaPicker({ cotizacionId, vehicleLabel }: { cotizacionId: string
             <label
               key={option}
               className={`cursor-pointer rounded-xl border p-4 text-center transition-colors ${
-                selected ? "border-cyan-200/70 bg-cyan-100/12" : "border-white/12 bg-[#061323]/40 hover:border-white/30"
+                selected ? "border-brand/60 bg-brand/15" : "border-line bg-surface-muted hover:border-ink/15"
               }`}
             >
               <input
@@ -104,7 +104,7 @@ function CarroceriaPicker({ cotizacionId, vehicleLabel }: { cotizacionId: string
       <button
         type="submit"
         disabled={pending}
-        className="mt-6 inline-flex min-h-12 items-center gap-2 rounded-full bg-cyan-200 px-6 text-sm font-bold text-[#071426] hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
+        className="mt-6 inline-flex min-h-12 items-center gap-2 rounded-full bg-brand px-6 text-sm font-bold text-ink hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
       >
         {pending ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
         Comenzar inspección
@@ -215,7 +215,7 @@ function SlotBoard({
     <div className="grid gap-4">
       <ProgressHeader cotizacionId={cotizacionId} inspeccion={inspeccion} />
 
-      <p className={`${panel} px-4 py-3 text-xs leading-5 text-white/55`}>
+      <p className={`${panel} px-4 py-3 text-xs leading-5 text-ink-muted`}>
         {actor === "CANAL"
           ? "Captura las fotos con el dispositivo del cliente o el tuyo. "
           : "Puedes usar el celular o la webcam del computador. "}
@@ -223,10 +223,10 @@ function SlotBoard({
       </p>
 
       {inspeccion.estado !== "COMPLETADA" && (
-        <section className="flex flex-col gap-4 rounded-2xl border border-amber-200/25 bg-amber-200/8 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <section className="flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-bold text-amber-50">Guardado parcial</p>
-            <p className="mt-1 text-xs leading-5 text-amber-50/70">
+            <p className="text-sm font-bold text-amber-700">Guardado parcial</p>
+            <p className="mt-1 text-xs leading-5 text-amber-700/80">
               Faltan {inspeccion.requeridas - inspeccion.completadas} toma(s) para completar la inspección. Puedes guardar y analizar las fotos disponibles ahora.
             </p>
           </div>
@@ -234,7 +234,7 @@ function SlotBoard({
             type="button"
             onClick={() => void kickAnalisis(true)}
             disabled={!inspeccion.completadas || analysing}
-            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-amber-100/30 bg-amber-100/12 px-5 text-sm font-bold text-amber-50 transition-colors hover:bg-amber-100/18 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-5 text-sm font-bold text-amber-700 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {analysing ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
             {analysing ? "Analizando…" : "Guardar y analizar"}
@@ -243,13 +243,13 @@ function SlotBoard({
       )}
 
       {analysisNotice && (
-        <p className="rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm text-emerald-50" role="status">
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">
           {analysisNotice}
         </p>
       )}
 
       {error && (
-        <p className="rounded-xl border border-red-300/25 bg-red-300/10 px-4 py-3 text-sm text-red-50" role="alert">
+        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
           {error}
         </p>
       )}
@@ -300,7 +300,7 @@ function ProgressHeader({ cotizacionId, inspeccion }: { cotizacionId: string; in
     <div className={`${panel} p-5 sm:p-6`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-100/60">Inspección fotográfica</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-text/80">Inspección fotográfica</p>
           <h2 className="mt-1 text-xl font-bold">
             {inspeccion.completadas} de {inspeccion.requeridas} fotos
           </h2>
@@ -308,8 +308,8 @@ function ProgressHeader({ cotizacionId, inspeccion }: { cotizacionId: string; in
         <span
           className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${
             done
-              ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-50"
-              : "border-cyan-100/25 bg-cyan-100/10 text-cyan-50"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-brand/25 bg-brand/10 text-brand-text"
           }`}
         >
           {done ? <CircleCheckBig className="size-4" /> : null}
@@ -317,19 +317,19 @@ function ProgressHeader({ cotizacionId, inspeccion }: { cotizacionId: string; in
         </span>
       </div>
 
-      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/12">
-        <div className="h-full rounded-full bg-cyan-200 transition-[width]" style={{ width: `${pct}%` }} />
+      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-ink/5">
+        <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${pct}%` }} />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-        <span className="text-white/55">
-          Carrocería: <strong className="text-white/85">{CARROCERIA_LABELS[inspeccion.carroceria]}</strong>
+        <span className="text-ink-muted">
+          Carrocería: <strong className="text-ink">{CARROCERIA_LABELS[inspeccion.carroceria]}</strong>
         </span>
         {!editing ? (
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="text-xs font-bold text-cyan-100 underline decoration-cyan-100/40 underline-offset-4 hover:decoration-cyan-100"
+            className="text-xs font-bold text-brand-text underline decoration-brand/40 underline-offset-4 hover:decoration-brand"
           >
             Cambiar
           </button>
@@ -352,7 +352,7 @@ function ProgressHeader({ cotizacionId, inspeccion }: { cotizacionId: string; in
             <select
               value={carroceria}
               onChange={(event) => setCarroceria(event.target.value as Carroceria)}
-              className="min-h-9 rounded-lg border border-white/18 bg-[#061323]/70 px-2 text-xs text-white [color-scheme:dark]"
+              className="min-h-9 rounded-lg border border-line bg-white/85 px-2 text-xs text-ink [color-scheme:light]"
             >
               {CARROCERIAS.map((option) => (
                 <option key={option} value={option}>
@@ -363,7 +363,7 @@ function ProgressHeader({ cotizacionId, inspeccion }: { cotizacionId: string; in
             <button
               type="submit"
               disabled={pending}
-              className="inline-flex min-h-9 items-center gap-1 rounded-full bg-white px-3 text-xs font-bold text-[#071426] disabled:opacity-60"
+              className="inline-flex min-h-9 items-center gap-1 rounded-full bg-ink px-3 text-xs font-bold text-white disabled:opacity-60"
             >
               {pending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
               Guardar
@@ -374,7 +374,7 @@ function ProgressHeader({ cotizacionId, inspeccion }: { cotizacionId: string; in
                 setEditing(false);
                 setCarroceria(inspeccion.carroceria);
               }}
-              className="text-xs font-semibold text-white/55 hover:text-white"
+              className="text-xs font-semibold text-ink-muted hover:text-ink"
             >
               Cancelar
             </button>
@@ -398,7 +398,7 @@ function ProgressHeader({ cotizacionId, inspeccion }: { cotizacionId: string; in
           <button
             type="submit"
             disabled={deletePending}
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-red-300/30 bg-red-300/10 px-3 text-xs font-bold text-red-100 hover:bg-red-300/16 disabled:opacity-60"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-60"
           >
             {deletePending ? <LoaderCircle className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
             Eliminar inspección
@@ -406,7 +406,7 @@ function ProgressHeader({ cotizacionId, inspeccion }: { cotizacionId: string; in
         </form>
       </div>
 
-      {errorMessage && <p className="mt-3 text-xs font-semibold text-red-200">{errorMessage}</p>}
+      {errorMessage && <p className="mt-3 text-xs font-semibold text-red-600">{errorMessage}</p>}
     </div>
   );
 }
@@ -429,21 +429,21 @@ function SlotCard({
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-bold">{SLOT_LABELS[slot]}</p>
-          <p className="mt-0.5 text-xs leading-4 text-white/50">{SLOT_HINTS[slot]}</p>
+          <p className="mt-0.5 text-xs leading-4 text-ink-subtle">{SLOT_HINTS[slot]}</p>
         </div>
         {foto && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-0.5 text-[10px] font-bold text-emerald-50">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
             <Check className="size-3" />
           </span>
         )}
       </div>
 
-      <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/10 bg-[#061323]/60">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-line bg-surface-muted">
         {foto ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={foto.signedUrl} alt={SLOT_LABELS[slot]} className="size-full object-cover" />
         ) : (
-          <span className="absolute inset-0 flex items-center justify-center p-6 text-white/25">
+          <span className="absolute inset-0 flex items-center justify-center p-6 text-ink-subtle/70">
             <Silhouette slot={slot} className="h-full w-full" />
           </span>
         )}
@@ -464,7 +464,7 @@ function SlotCard({
           type="button"
           onClick={onCapture}
           disabled={busy}
-          className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-full bg-white px-3 text-xs font-bold text-[#071426] hover:opacity-90 disabled:opacity-60"
+          className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-full bg-ink px-3 text-xs font-bold text-white hover:opacity-90 disabled:opacity-60"
         >
           {foto ? <RefreshCw className="size-3.5" /> : <Camera className="size-3.5" />}
           {foto ? "Repetir" : "Tomar foto"}
@@ -474,7 +474,7 @@ function SlotCard({
             type="button"
             onClick={onRemove}
             disabled={busy}
-            className="inline-flex min-h-10 items-center justify-center rounded-full border border-white/15 px-3 text-xs font-bold text-white/70 hover:bg-white/8 disabled:opacity-60"
+            className="inline-flex min-h-10 items-center justify-center rounded-full border border-line px-3 text-xs font-bold text-ink/80 hover:bg-ink/5 disabled:opacity-60"
             aria-label="Eliminar foto"
           >
             {busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
@@ -672,16 +672,16 @@ function CaptureModal({
   }, [cotizacionId, geo, mode, onSaved, preview, slot]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#030b16]/95 backdrop-blur">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+    <div className="fixed inset-0 z-50 flex flex-col bg-white/95 backdrop-blur">
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <div>
           <p className="text-sm font-bold">{SLOT_LABELS[slot]}</p>
-          <p className="text-xs text-white/55">{SLOT_HINTS[slot]}</p>
+          <p className="text-xs text-ink-muted">{SLOT_HINTS[slot]}</p>
         </div>
         <button
           type="button"
           onClick={close}
-          className="inline-flex size-10 items-center justify-center rounded-full border border-white/15 hover:bg-white/8"
+          className="inline-flex size-10 items-center justify-center rounded-full border border-line hover:bg-ink/5"
           aria-label="Cerrar"
         >
           <X className="size-4" />
@@ -703,13 +703,13 @@ function CaptureModal({
             />
             {mode === "loading" && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <LoaderCircle className="size-6 animate-spin text-white/60" />
+                <LoaderCircle className="size-6 animate-spin text-ink-muted" />
               </div>
             )}
             {mode === "fallback" && (
               <div className="absolute inset-x-0 bottom-6 flex flex-col items-center gap-2 px-4 text-center">
-                <p className="text-xs text-white/60">No pudimos abrir la cámara. Sube una foto desde tu dispositivo.</p>
-                <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[#071426]">
+                <p className="text-xs text-ink-muted">No pudimos abrir la cámara. Sube una foto desde tu dispositivo.</p>
+                <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full bg-ink px-5 text-sm font-bold text-white">
                   <ImageUp className="size-4" />
                   Elegir imagen
                   <input
@@ -729,9 +729,9 @@ function CaptureModal({
         )}
       </div>
 
-      <div className="border-t border-white/10 px-4 py-4">
-        {error && <p className="mb-3 text-center text-xs font-semibold text-red-200">{error}</p>}
-        <div className="flex items-center justify-between gap-3 text-xs text-white/55">
+      <div className="border-t border-line px-4 py-4">
+        {error && <p className="mb-3 text-center text-xs font-semibold text-red-600">{error}</p>}
+        <div className="flex items-center justify-between gap-3 text-xs text-ink-muted">
           <span className="inline-flex items-center gap-1.5">
             <MapPin className="size-3.5" />
             {geoState === "ok"
@@ -747,7 +747,7 @@ function CaptureModal({
                   type="button"
                   onClick={retake}
                   disabled={uploading}
-                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/15 px-4 text-sm font-bold text-white/75 hover:bg-white/8 disabled:opacity-60"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-line px-4 text-sm font-bold text-ink/80 hover:bg-ink/5 disabled:opacity-60"
                 >
                   <RefreshCw className="size-4" />
                   Repetir
@@ -756,7 +756,7 @@ function CaptureModal({
                   type="button"
                   onClick={save}
                   disabled={uploading}
-                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-cyan-200 px-5 text-sm font-bold text-[#071426] hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-brand px-5 text-sm font-bold text-ink hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
                 >
                   {uploading ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
                   Guardar
@@ -767,7 +767,7 @@ function CaptureModal({
                 <button
                   type="button"
                   onClick={shoot}
-                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-white px-6 text-sm font-bold text-[#071426] hover:opacity-90"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-ink px-6 text-sm font-bold text-white hover:opacity-90"
                 >
                   <Camera className="size-4" />
                   Capturar

@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Confia",
-  description: "Confia",
+  title: "Kuantix",
+  description: "Kuantix",
 };
 
 export const viewport: Viewport = {

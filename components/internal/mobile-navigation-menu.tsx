@@ -31,7 +31,7 @@ export function MobileNavigationMenu({
   return (
     <details ref={detailsRef} className="shrink-0">
       <summary
-        className="flex size-11 cursor-pointer list-none items-center justify-center rounded-full border border-white/15 bg-white/5"
+        className="flex size-11 cursor-pointer list-none items-center justify-center rounded-full border border-line bg-surface-muted"
         aria-label={label}
       >
         <Menu className="size-5" aria-hidden="true" />

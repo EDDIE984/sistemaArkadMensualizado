@@ -6,7 +6,7 @@ export const MONTHS: [number, string][] = [
 ];
 
 const control =
-  "min-h-11 min-w-0 rounded-xl border border-white/15 bg-[#061323]/65 px-3.5 text-sm text-white outline-none focus:border-cyan-100/55 [color-scheme:dark]";
+  "min-h-11 min-w-0 rounded-xl border border-line bg-white px-3.5 text-sm text-ink outline-none focus:border-brand/60 [color-scheme:light]";
 
 type Selected = { canal: string | null; desde: number; hasta: number };
 
@@ -24,7 +24,7 @@ export function DashboardFilters({
   return (
     <form className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
       <label className="grid gap-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Canal</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Canal</span>
         <select name="canal" defaultValue={selected.canal ?? ""} className={control}>
           <option value="">Todos los canales</option>
           {canales.map((c) => (
@@ -33,7 +33,7 @@ export function DashboardFilters({
         </select>
       </label>
       <label className="grid gap-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Desde</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Desde</span>
         <select name="desde" defaultValue={String(selected.desde)} className={control}>
           {years.map((y) => (
             <option key={y} value={y}>{y}</option>
@@ -41,7 +41,7 @@ export function DashboardFilters({
         </select>
       </label>
       <label className="grid gap-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Hasta</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Hasta</span>
         <select name="hasta" defaultValue={String(selected.hasta)} className={control}>
           {years.map((y) => (
             <option key={y} value={y}>{y}</option>
@@ -49,13 +49,13 @@ export function DashboardFilters({
         </select>
       </label>
       <div className="flex gap-2">
-        <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-white px-5 text-sm font-bold text-[#071426]">
+        <button className="inline-flex min-h-11 items-center justify-center rounded-full bg-ink px-5 text-sm font-bold text-white">
           Aplicar
         </button>
         {dirty && (
           <Link
             href="/aseguradora"
-            className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/14 px-5 text-sm font-bold text-white/70"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-line px-5 text-sm font-bold text-ink/80"
           >
             Limpiar
           </Link>

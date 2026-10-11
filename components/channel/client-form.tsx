@@ -6,7 +6,7 @@ import { saveAssistedClient } from "@/app/actions/channel";
 import { initialChannelState } from "@/lib/channel/action-state";
 import { useCedulaLookup } from "@/lib/cedula/use-cedula-lookup";
 
-const input = "min-h-12 min-w-0 w-full rounded-xl border border-white/15 bg-[#061323]/65 px-4 text-sm text-white outline-none focus:border-cyan-100/55 [color-scheme:dark]";
+const input = "min-h-12 min-w-0 w-full rounded-xl border border-line bg-white px-4 text-sm text-ink outline-none focus:border-brand/60 [color-scheme:light]";
 
 export function AssistedClientForm({ cities }: { cities: { id: string; nombre: string }[] }) {
   const [state, action, pending] = useActionState(saveAssistedClient, initialChannelState);
@@ -26,7 +26,7 @@ export function AssistedClientForm({ cities }: { cities: { id: string; nombre: s
   return (
     <form action={action} className="grid min-w-0 gap-4">
       {state.message && (
-        <p className={`rounded-xl border px-4 py-3 text-sm ${state.status === "success" ? "border-emerald-300/25 bg-emerald-300/10" : "border-red-300/25 bg-red-300/10"}`}>
+        <p className={`rounded-xl border px-4 py-3 text-sm ${state.status === "success" ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
           {state.message}
         </p>
       )}
@@ -37,15 +37,15 @@ export function AssistedClientForm({ cities }: { cities: { id: string; nombre: s
         <Field label="Cédula o RUC">
           <input name="identification" required inputMode="numeric" onChange={(e) => runLookup(e.target.value)} onBlur={(e) => runLookup(e.target.value)} className={input} />
           {lookupStatus === "loading" && (
-            <span className="mt-2 flex items-center gap-1.5 text-xs text-white/60">
+            <span className="mt-2 flex items-center gap-1.5 text-xs text-ink-muted">
               <LoaderCircle className="size-3 animate-spin" />Consultando cédula…
             </span>
           )}
           {lookupStatus === "not-found" && (
-            <span className="mt-2 block text-xs text-amber-200">No encontramos datos para esta cédula. Ingresa los datos manualmente.</span>
+            <span className="mt-2 block text-xs text-amber-700">No encontramos datos para esta cédula. Ingresa los datos manualmente.</span>
           )}
           {lookupStatus === "error" && (
-            <span className="mt-2 block text-xs text-red-200">No pudimos consultar el servicio. Ingresa los datos manualmente.</span>
+            <span className="mt-2 block text-xs text-red-600">No pudimos consultar el servicio. Ingresa los datos manualmente.</span>
           )}
         </Field>
         <Field label="Correo">
@@ -84,11 +84,11 @@ export function AssistedClientForm({ cities }: { cities: { id: string; nombre: s
       </div>
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
         {state.clientId && (
-          <Link href={`/canal/cotizaciones/nueva?cliente=${state.clientId}`} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-cyan-200 px-5 text-sm font-bold text-[#071426]">
+          <Link href={`/canal/cotizaciones/nueva?cliente=${state.clientId}`} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand px-5 text-sm font-bold text-ink">
             <ShieldCheck className="size-4" />Cotizar para este cliente
           </Link>
         )}
-        <button disabled={pending} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-bold text-[#071426] disabled:opacity-60">
+        <button disabled={pending} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-ink px-5 text-sm font-bold text-white disabled:opacity-60">
           {pending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}
           {pending ? "Guardando…" : "Registrar cliente"}
         </button>
@@ -100,7 +100,7 @@ export function AssistedClientForm({ cities }: { cities: { id: string; nombre: s
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block min-w-0">
-      <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-white/48">{label}</span>
+      <span className="mb-2 block text-xs font-bold uppercase tracking-wider text-ink-subtle">{label}</span>
       {children}
     </label>
   );

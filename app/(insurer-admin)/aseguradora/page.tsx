@@ -7,7 +7,7 @@ import { requireInsurerAdmin } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDbPool } from "@/lib/db/pool";
 
-export const metadata: Metadata = { title: "Administración de aseguradora | Arkad", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Administración de aseguradora | Kuantix", robots: { index: false, follow: false } };
 
 type KpiRow = {
   quotes: string; accepted: string; policies: string;
@@ -145,7 +145,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       title={insurer.data?.nombre_comercial || "Mi aseguradora"}
       description="Monitorea producción, conversión y comisiones del canal de tu operación."
     >
-      <p className="mt-3 text-xs text-white/40">Los indicadores se obtienen de cotizaciones y pólizas registradas en la base de datos.</p>
+      <p className="mt-3 text-xs text-ink-subtle">Los indicadores se obtienen de cotizaciones y pólizas registradas en la base de datos.</p>
 
       <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Metric icon={<FileText />} label="Cotizaciones" value={quoteCount.toLocaleString("es-EC")} detail={`${Number(k.accepted)} aceptadas`} />
@@ -156,25 +156,25 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       <section className="mt-4 grid gap-4">
         <div className="glass-panel grid content-start gap-3 p-5 sm:p-6">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-100/60">Comisiones del canal</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-text/80">Comisiones del canal</p>
             <h2 className="mt-2 text-lg font-bold">Comisión proyectada</h2>
-            <p className="mt-1 text-xs text-white/45">Cuotas proyectadas con vencimiento entre {periodLabel}</p>
+            <p className="mt-1 text-xs text-ink-subtle">Cuotas proyectadas con vencimiento entre {periodLabel}</p>
           </div>
           <DashboardFilters canales={canales ?? []} years={yearOptions} selected={{ canal: canalId, desde: fromYear, hasta: toYear }} />
           <CommissionTile icon={<HandCoins />} label="Proyección total" value={money(commissionProjected)} detail="Comisión de las cuotas proyectadas dentro del período" />
         </div>
         <div className="glass-panel grid content-start gap-4 p-5 sm:p-6">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-100/60">Consulta independiente</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-text/80">Consulta independiente</p>
             <h2 className="mt-2 text-lg font-bold">Comisión mensualizada</h2>
           </div>
           <form className="flex flex-wrap items-end gap-2" aria-label="Consultar comisión mensualizada">
             {canalId && <input type="hidden" name="canal" value={canalId} />}
             <input type="hidden" name="desde" value={fromYear} />
             <input type="hidden" name="hasta" value={toYear} />
-            <label className="grid gap-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Año</span><select name="comisionAnio" defaultValue={String(commissionYear)} className="min-h-11 rounded-xl border border-white/15 bg-[#061323]/65 px-3 text-sm text-white [color-scheme:dark]">{yearOptions.map(year => <option key={year} value={year}>{year}</option>)}</select></label>
-            <label className="grid gap-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-white/42">Mes</span><select name="comisionMes" defaultValue={String(commissionMonth)} className="min-h-11 rounded-xl border border-white/15 bg-[#061323]/65 px-3 text-sm text-white [color-scheme:dark]">{MONTHS.map(([month, label]) => <option key={month} value={month}>{label}</option>)}</select></label>
-            <button className="min-h-11 rounded-full bg-white px-4 text-xs font-bold text-[#071426]">Consultar</button>
+            <label className="grid gap-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Año</span><select name="comisionAnio" defaultValue={String(commissionYear)} className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink [color-scheme:light]">{yearOptions.map(year => <option key={year} value={year}>{year}</option>)}</select></label>
+            <label className="grid gap-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Mes</span><select name="comisionMes" defaultValue={String(commissionMonth)} className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink [color-scheme:light]">{MONTHS.map(([month, label]) => <option key={month} value={month}>{label}</option>)}</select></label>
+            <button className="min-h-11 rounded-full bg-ink px-4 text-xs font-bold text-white">Consultar</button>
           </form>
           <CommissionTile icon={<BadgePercent />} label="Comisión del mes" value={money(commissionMonthly)} detail={`Cuotas con vencimiento en ${MONTHS.find(([value]) => value === commissionMonth)?.[1]} de ${commissionYear}`} />
         </div>
@@ -207,21 +207,21 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 function Metric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
   return (
     <article className="glass-panel min-w-0 p-5">
-      <span className="text-cyan-100 [&_svg]:size-5">{icon}</span>
+      <span className="text-brand [&_svg]:size-5">{icon}</span>
       <p className="mt-7 break-words text-3xl font-bold tracking-[-0.04em]">{value}</p>
-      <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-white/42">{label}</p>
-      <p className="mt-2 text-xs text-white/38">{detail}</p>
+      <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-ink-subtle">{label}</p>
+      <p className="mt-2 text-xs text-ink-subtle">{detail}</p>
     </article>
   );
 }
 
 function CommissionTile({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
   return (
-    <article className="rounded-2xl border border-cyan-100/15 bg-cyan-100/[0.06] p-4">
-      <span className="text-cyan-100 [&_svg]:size-4">{icon}</span>
+    <article className="rounded-2xl border border-brand/25 bg-brand/5 p-4">
+      <span className="text-brand [&_svg]:size-4">{icon}</span>
       <p className="mt-3 break-words text-2xl font-bold tracking-[-0.03em]">{value}</p>
-      <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-white/42">{label}</p>
-      <p className="mt-1 text-[11px] text-white/38">{detail}</p>
+      <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-subtle">{label}</p>
+      <p className="mt-1 text-[11px] text-ink-subtle">{detail}</p>
     </article>
   );
 }
@@ -231,7 +231,7 @@ function ChartPanel({ title, description, children }: { title: string; descripti
     <section className="glass-panel min-w-0 p-5 sm:p-6">
       <header className="mb-6">
         <h2 className="font-bold">{title}</h2>
-        <p className="mt-1 text-xs text-white/45">{description}</p>
+        <p className="mt-1 text-xs text-ink-subtle">{description}</p>
       </header>
       {children}
     </section>

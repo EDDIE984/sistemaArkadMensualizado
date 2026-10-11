@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getQuoteFormData } from "@/lib/quotes/data";
 
-export const metadata: Metadata = { title: "Nueva cotización | Confia", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Nueva cotización | Kuantix", robots: { index: false, follow: false } };
 
 export default async function NewQuotePage({ searchParams }: PageProps<"/mi-cuenta/cotizaciones/nueva">) {
   const session = await requireSession();
@@ -21,10 +21,10 @@ export default async function NewQuotePage({ searchParams }: PageProps<"/mi-cuen
 
   return (
     <main className="relative z-10 mx-auto w-full max-w-[1080px] px-4 py-8 sm:px-7 lg:px-10 lg:py-12">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-100/70">Cotizador vehicular</p>
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-text/80">Cotizador vehicular</p>
       <h1 className="mt-2 text-balance text-[36px] font-bold tracking-[-0.035em] sm:text-[46px]">Tu protección empieza aquí.</h1>
-      <p className="mt-3 max-w-2xl text-sm leading-6 text-white/62 sm:text-base">Completa cuatro pasos para conocer tu cuota mensual. Tus datos se evalúan de forma segura y solo para esta cotización.</p>
-      {params.profile === "completed" && <p className="mt-5 flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm text-emerald-50"><CheckCircle2 className="size-4" /> Perfil completado. Ya puedes realizar tu primera cotización.</p>}
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-ink-muted sm:text-base">Completa cuatro pasos para conocer tu cuota mensual. Tus datos se evalúan de forma segura y solo para esta cotización.</p>
+      {params.profile === "completed" && <p className="mt-5 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"><CheckCircle2 className="size-4" /> Perfil completado. Ya puedes realizar tu primera cotización.</p>}
       <QuoteWizard data={data} />
     </main>
   );

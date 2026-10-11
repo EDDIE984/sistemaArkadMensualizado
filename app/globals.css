@@ -6,6 +6,16 @@
 
 @theme inline {
   --color-background: var(--background);
+  --color-brand: #02c7b3;
+  --color-brand-strong: #00a898;
+  --color-brand-text: #00897b;
+  --color-ink: #173250;
+  --color-ink-strong: #0f2440;
+  --color-ink-muted: #5b6b7f;
+  --color-ink-subtle: #74839a;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f5f8fb;
+  --color-line: #e3e9f0;
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
@@ -50,12 +60,12 @@
 
 :root {
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: #173250;
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: #173250;
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: #173250;
+  --primary: #173250;
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -66,12 +76,12 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --ring: #02c7b3;
+  --chart-1: #02c7b3;
+  --chart-2: #173250;
+  --chart-3: #5fdccf;
+  --chart-4: #4a6584;
+  --chart-5: #a9eee6;
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -223,10 +233,9 @@
 }
 
 .internal-background {
-  background-color: #061323;
-  background-image:
-    linear-gradient(rgba(3, 13, 26, 0.18), rgba(3, 13, 26, 0.34)),
-    url("/images/internal-app-background.png");
+  color-scheme: light;
+  background-color: #ffffff;
+  background-image: url("/images/internal-app-background-light.webp");
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
@@ -234,10 +243,10 @@
 }
 
 .glass-panel {
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid #e3e9f0;
   border-radius: 1.35rem;
-  background: rgba(5, 18, 34, 0.62);
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 30px rgba(23, 50, 80, 0.06);
   backdrop-filter: blur(12px);
 }
 

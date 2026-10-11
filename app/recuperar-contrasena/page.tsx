@@ -3,7 +3,7 @@ import { KeyRound } from "lucide-react";
 import { SiteNav } from "@/components/site-nav";
 import { PasswordRecoveryForm } from "@/components/auth/password-recovery-form";
 
-export const metadata: Metadata = { title: "Recuperar contraseña | Confia", description: "Solicita un enlace temporal para restablecer tu contraseña.", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Recuperar contraseña | Kuantix", description: "Solicita un enlace temporal para restablecer tu contraseña.", robots: { index: false, follow: false } };
 
 export default function PasswordRecoveryPage() {
   return <main className="relative min-h-dvh overflow-x-hidden bg-[#0a0a0a] text-white">

@@ -21,7 +21,7 @@ import {
 import type { InspeccionRevisionView } from "@/lib/inspeccion/types";
 import { InspeccionMap } from "@/components/insurer/inspeccion-map";
 
-const panel = "rounded-2xl border border-white/12 bg-[#05121f]/60 backdrop-blur";
+const panel = "rounded-2xl border border-line bg-surface-muted backdrop-blur";
 const TABS = ["coche", "danos", "originales", "ia"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
@@ -42,10 +42,10 @@ function title(v: string) {
 }
 
 function SevPill({ sev }: { sev: Severidad | "SIN_DANOS" | null }) {
-  if (!sev) return <span className="text-white/40">—</span>;
+  if (!sev) return <span className="text-ink-subtle">—</span>;
   if (sev === "SIN_DANOS")
     return (
-      <span className="rounded-full border border-emerald-300/25 bg-emerald-300/10 px-2 py-0.5 text-[10px] font-bold text-emerald-100">
+      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
         Sin daños
       </span>
     );
@@ -62,10 +62,10 @@ function SevPill({ sev }: { sev: Severidad | "SIN_DANOS" | null }) {
 function RevisionPill({ estado }: { estado: "PENDIENTE" | "APROBADA" | "RECHAZADA" }) {
   const tone =
     estado === "APROBADA"
-      ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
       : estado === "RECHAZADA"
-        ? "border-rose-300/25 bg-rose-300/10 text-rose-100"
-        : "border-amber-200/25 bg-amber-200/10 text-amber-100";
+        ? "border-rose-200 bg-rose-50 text-rose-700"
+        : "border-amber-200 bg-amber-50 text-amber-700";
   const label = estado === "APROBADA" ? "Aprobada" : estado === "RECHAZADA" ? "Rechazada" : "Pendiente";
   return (
     <span className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider ${tone}`}>{label}</span>
@@ -128,7 +128,7 @@ export function InspeccionRevision({ view }: { view: InspeccionRevisionView }) {
         <div className="flex flex-wrap items-center gap-3">
           <RevisionPill estado={view.estadoRevision} />
           {view.revisadoEn && (
-            <span className="text-xs text-white/50">
+            <span className="text-xs text-ink-subtle">
               {view.revisorNombre ?? "—"} · {fecha(view.revisadoEn)}
             </span>
           )}
@@ -145,7 +145,7 @@ export function InspeccionRevision({ view }: { view: InspeccionRevisionView }) {
             <button
               type="submit"
               disabled={!dirty || saving}
-              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/15 px-4 text-xs font-bold text-white/80 hover:bg-white/8 disabled:opacity-40"
+              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line px-4 text-xs font-bold text-ink hover:bg-ink/5 disabled:opacity-40"
             >
               {saving ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
               Guardar observaciones
@@ -155,7 +155,7 @@ export function InspeccionRevision({ view }: { view: InspeccionRevisionView }) {
             type="button"
             onClick={() => setDictamen("APROBADA")}
             disabled={view.estadoRevision === "APROBADA"}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-300/10 px-4 text-xs font-bold text-emerald-50 hover:bg-emerald-300/16 disabled:opacity-40"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 text-xs font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-40"
           >
             <ThumbsUp className="size-4" /> Aprobar
           </button>
@@ -163,7 +163,7 @@ export function InspeccionRevision({ view }: { view: InspeccionRevisionView }) {
             type="button"
             onClick={() => setDictamen("RECHAZADA")}
             disabled={view.estadoRevision === "RECHAZADA"}
-            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-rose-300/30 bg-rose-300/10 px-4 text-xs font-bold text-rose-50 hover:bg-rose-300/16 disabled:opacity-40"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-4 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-40"
           >
             <ThumbsDown className="size-4" /> Rechazar
           </button>
@@ -171,14 +171,14 @@ export function InspeccionRevision({ view }: { view: InspeccionRevisionView }) {
       </div>
 
       {(saveState.status === "error" || aproState.status === "error" || rechState.status === "error") && (
-        <p className="rounded-xl border border-red-300/25 bg-red-300/10 px-4 py-3 text-sm text-red-50" role="alert">
+        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
           {saveState.message || aproState.message || rechState.message}
         </p>
       )}
 
       {view.revisionMotivo && (
-        <p className={`${panel} px-4 py-3 text-sm text-white/70`}>
-          <span className="font-bold text-white/85">Motivo del dictamen:</span> {view.revisionMotivo}
+        <p className={`${panel} px-4 py-3 text-sm text-ink/80`}>
+          <span className="font-bold text-ink">Motivo del dictamen:</span> {view.revisionMotivo}
         </p>
       )}
 
@@ -202,14 +202,14 @@ export function InspeccionRevision({ view }: { view: InspeccionRevisionView }) {
                 ? "Ej.: Fotos completas y daños correctamente clasificados."
                 : "Ej.: Faltan fotos nítidas del lateral izquierdo; repetir captura."
             }
-            className="min-h-20 w-full rounded-xl border border-white/15 bg-[#061323]/65 px-3 py-2 text-sm text-white outline-none focus:border-cyan-100/55"
+            className="min-h-20 w-full rounded-xl border border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-brand/60"
           />
           <div className="flex gap-2">
             <button
               type="submit"
               disabled={aproPending || rechPending}
-              className={`inline-flex min-h-10 items-center gap-2 rounded-full px-5 text-sm font-bold text-[#071426] disabled:opacity-60 ${
-                dictamen === "APROBADA" ? "bg-emerald-200" : "bg-rose-200"
+              className={`inline-flex min-h-10 items-center gap-2 rounded-full px-5 text-sm font-bold text-ink disabled:opacity-60 ${
+                dictamen === "APROBADA" ? "bg-emerald-500" : "bg-rose-500"
               }`}
             >
               {aproPending || rechPending ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
@@ -218,7 +218,7 @@ export function InspeccionRevision({ view }: { view: InspeccionRevisionView }) {
             <button
               type="button"
               onClick={() => setDictamen(null)}
-              className="inline-flex min-h-10 items-center rounded-full border border-white/15 px-4 text-sm font-semibold text-white/60 hover:bg-white/8"
+              className="inline-flex min-h-10 items-center rounded-full border border-line px-4 text-sm font-semibold text-ink-muted hover:bg-ink/5"
             >
               Cancelar
             </button>
@@ -228,14 +228,14 @@ export function InspeccionRevision({ view }: { view: InspeccionRevisionView }) {
 
       {/* Tabs */}
       <div className={`${panel} overflow-hidden`}>
-        <div className="flex flex-wrap gap-1 border-b border-white/10 p-2">
+        <div className="flex flex-wrap gap-1 border-b border-line p-2">
           {TABS.map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setTab(t)}
               className={`min-h-9 rounded-lg px-3 text-xs font-bold transition-colors ${
-                tab === t ? "bg-cyan-100/12 text-cyan-50" : "text-white/55 hover:bg-white/6 hover:text-white"
+                tab === t ? "bg-brand/15 text-brand-text" : "text-ink-muted hover:bg-surface-muted hover:text-ink"
               }`}
             >
               {TAB_LABEL[t]}
@@ -277,9 +277,9 @@ export function InspeccionRevision({ view }: { view: InspeccionRevisionView }) {
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-white/42">{label}</p>
-      <p className="mt-1 break-words text-sm font-semibold text-white/85">{value || "—"}</p>
+    <div className="rounded-xl border border-line bg-surface-muted p-3">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-ink-subtle">{label}</p>
+      <p className="mt-1 break-words text-sm font-semibold text-ink">{value || "—"}</p>
     </div>
   );
 }
@@ -290,7 +290,7 @@ function TabCoche({ view }: { view: InspeccionRevisionView }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <div className="grid gap-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-cyan-100/60">Vehículo</p>
+        <p className="text-xs font-bold uppercase tracking-wider text-brand-text/80">Vehículo</p>
         <div className="grid gap-2 sm:grid-cols-2">
           <Info label="Placa" value={v.placa ?? "—"} />
           <Info label="Marca / Modelo" value={`${v.marca} ${v.modelo}`.trim()} />
@@ -302,7 +302,7 @@ function TabCoche({ view }: { view: InspeccionRevisionView }) {
           <Info label="Carrocería (inspección)" value={CARROCERIA_LABELS[view.carroceria]} />
         </div>
 
-        <p className="mt-2 text-xs font-bold uppercase tracking-wider text-cyan-100/60">Cliente</p>
+        <p className="mt-2 text-xs font-bold uppercase tracking-wider text-brand-text/80">Cliente</p>
         <div className="grid gap-2 sm:grid-cols-2">
           <Info label="Nombre" value={c.nombre} />
           <Info label="Identificación" value={c.identificacion ?? "—"} />
@@ -312,7 +312,7 @@ function TabCoche({ view }: { view: InspeccionRevisionView }) {
           {view.agente && <Info label="Agente de canal" value={view.agente} />}
         </div>
 
-        <p className="mt-2 text-xs font-bold uppercase tracking-wider text-cyan-100/60">Inspección</p>
+        <p className="mt-2 text-xs font-bold uppercase tracking-wider text-brand-text/80">Inspección</p>
         <div className="grid gap-2 sm:grid-cols-2">
           <Info label="Origen" value={view.origen === "CANAL" ? "Canal asistido" : "Autogestión"} />
           <Info label="Completada" value={fecha(view.completadaEn)} />
@@ -322,11 +322,11 @@ function TabCoche({ view }: { view: InspeccionRevisionView }) {
       </div>
 
       <div className="grid content-start gap-2">
-        <p className="text-xs font-bold uppercase tracking-wider text-cyan-100/60">Ubicación</p>
+        <p className="text-xs font-bold uppercase tracking-wider text-brand-text/80">Ubicación</p>
         {view.mapa ? (
           <InspeccionMap lat={view.mapa.lat} lng={view.mapa.lng} />
         ) : (
-          <p className={`${panel} px-4 py-6 text-center text-sm text-white/45`}>
+          <p className={`${panel} px-4 py-6 text-center text-sm text-ink-subtle`}>
             Sin ubicación registrada (el usuario no concedió geolocalización).
           </p>
         )}
@@ -353,50 +353,50 @@ function TabDanos({
   onVer: (foto: DanoFlat["foto"]) => void;
 }) {
   if (!danosFlat.length) {
-    return <p className="py-8 text-center text-sm text-white/45">La IA no detectó daños en esta inspección.</p>;
+    return <p className="py-8 text-center text-sm text-ink-subtle">La IA no detectó daños en esta inspección.</p>;
   }
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-left text-sm">
-        <thead className="text-[10px] uppercase tracking-wider text-white/40">
+        <thead className="text-[10px] uppercase tracking-wider text-ink-subtle">
           <tr>
             {["Foto", "Ubicación", "Tipo", "Pieza", "Descripción IA", "Conf.", "Gravedad IA", "Gravedad (técnico)", ""].map((h) => (
               <th key={h} className="px-3 py-3">{h}</th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/8">
+        <tbody className="divide-y divide-line">
           {danosFlat.map(({ dano, foto }) => (
             <tr key={dano.id}>
               <td className="px-3 py-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={foto.originalUrl} alt="" className="size-12 rounded-lg object-cover" />
               </td>
-              <td className="px-3 py-3 text-white/72">{SLOT_LABELS[foto.slot]}</td>
-              <td className="px-3 py-3 text-white/72">{TIPO_LABEL[dano.tipo as keyof typeof TIPO_LABEL] ?? dano.tipo}</td>
-              <td className="px-3 py-3 text-white/72">{dano.pieza ?? "—"}</td>
-              <td className="max-w-[280px] px-3 py-3 text-white/55">{dano.descripcion ?? "—"}</td>
-              <td className="px-3 py-3 text-white/55">{dano.confianza !== null ? `${Math.round(dano.confianza * 100)}%` : "—"}</td>
+              <td className="px-3 py-3 text-ink/80">{SLOT_LABELS[foto.slot]}</td>
+              <td className="px-3 py-3 text-ink/80">{TIPO_LABEL[dano.tipo as keyof typeof TIPO_LABEL] ?? dano.tipo}</td>
+              <td className="px-3 py-3 text-ink/80">{dano.pieza ?? "—"}</td>
+              <td className="max-w-[280px] px-3 py-3 text-ink-muted">{dano.descripcion ?? "—"}</td>
+              <td className="px-3 py-3 text-ink-muted">{dano.confianza !== null ? `${Math.round(dano.confianza * 100)}%` : "—"}</td>
               <td className="px-3 py-3"><SevPill sev={dano.severidadIa} /></td>
               <td className="px-3 py-3">
                 <select
                   value={sev[dano.id] ?? ""}
                   disabled={disabled}
                   onChange={(e) => setSev((prev) => ({ ...prev, [dano.id]: e.target.value }))}
-                  className="min-h-9 rounded-lg border border-white/18 bg-[#061323]/70 px-2 text-xs text-white [color-scheme:dark] disabled:opacity-50"
+                  className="min-h-9 rounded-lg border border-line bg-white/85 px-2 text-xs text-ink [color-scheme:light] disabled:opacity-50"
                 >
                   <option value="">= IA ({SEVERIDAD_LABEL[dano.severidadIa]})</option>
                   {SEVERIDADES.map((s) => (
                     <option key={s} value={s}>{SEVERIDAD_LABEL[s]}</option>
                   ))}
                 </select>
-                <span className="ml-2 block text-[10px] text-white/35">Acción IA: {ACCION_LABEL[dano.accionRecomendada as keyof typeof ACCION_LABEL] ?? dano.accionRecomendada}</span>
+                <span className="ml-2 block text-[10px] text-ink-subtle">Acción IA: {ACCION_LABEL[dano.accionRecomendada as keyof typeof ACCION_LABEL] ?? dano.accionRecomendada}</span>
               </td>
               <td className="px-3 py-3">
                 <button
                   type="button"
                   onClick={() => onVer(foto)}
-                  className="inline-flex min-h-8 items-center gap-1 rounded-full border border-white/15 px-2.5 text-[11px] font-bold text-white/70 hover:bg-white/8"
+                  className="inline-flex min-h-8 items-center gap-1 rounded-full border border-line px-2.5 text-[11px] font-bold text-ink/80 hover:bg-ink/5"
                 >
                   <ScanSearch className="size-3.5" /> Ver
                 </button>
@@ -435,7 +435,7 @@ function TabImagenes({
             <button
               type="button"
               onClick={() => onOpen({ original: f.originalUrl, analizada: f.analizadaUrl, label: SLOT_LABELS[f.slot] })}
-              className="relative block aspect-[4/3] overflow-hidden rounded-xl border border-white/10 bg-[#061323]/60"
+              className="relative block aspect-[4/3] overflow-hidden rounded-xl border border-line bg-surface-muted"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={src} alt={SLOT_LABELS[f.slot]} className="size-full object-cover" />
@@ -450,11 +450,11 @@ function TabImagenes({
                 </span>
               )}
             </button>
-            <p className="text-xs font-bold text-white/80">{SLOT_LABELS[f.slot]}</p>
+            <p className="text-xs font-bold text-ink">{SLOT_LABELS[f.slot]}</p>
             {modo === "original" && (
               <>
                 {f.danos.length > 0 && (
-                  <ul className="grid gap-0.5 text-[11px] leading-4 text-white/45">
+                  <ul className="grid gap-0.5 text-[11px] leading-4 text-ink-subtle">
                     {f.danos.map((d) => (
                       <li key={d.id}>
                         · {TIPO_LABEL[d.tipo as keyof typeof TIPO_LABEL] ?? d.tipo}
@@ -469,7 +469,7 @@ function TabImagenes({
                   onChange={(e) => setObs((prev) => ({ ...prev, [f.id]: e.target.value }))}
                   rows={2}
                   placeholder="Observación del técnico…"
-                  className="w-full rounded-lg border border-white/15 bg-[#061323]/65 px-2.5 py-1.5 text-xs text-white outline-none focus:border-cyan-100/55 disabled:opacity-50"
+                  className="w-full rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs text-ink outline-none focus:border-brand/60 disabled:opacity-50"
                 />
               </>
             )}
@@ -505,23 +505,23 @@ function Lightbox({
   }, [onClose]);
   const src = ver === "analizada" && analizada ? analizada : original;
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#030b16]/95 backdrop-blur">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+    <div className="fixed inset-0 z-50 flex flex-col bg-white/95 backdrop-blur">
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <p className="text-sm font-bold">{label}</p>
         <div className="flex items-center gap-2">
           {analizada && (
-            <div className="flex overflow-hidden rounded-full border border-white/15 text-xs font-bold">
+            <div className="flex overflow-hidden rounded-full border border-line text-xs font-bold">
               <button
                 type="button"
                 onClick={() => setVer("original")}
-                className={`px-3 py-1.5 ${ver === "original" ? "bg-white text-[#071426]" : "text-white/60"}`}
+                className={`px-3 py-1.5 ${ver === "original" ? "bg-ink text-white" : "text-ink-muted"}`}
               >
                 Original
               </button>
               <button
                 type="button"
                 onClick={() => setVer("analizada")}
-                className={`px-3 py-1.5 ${ver === "analizada" ? "bg-white text-[#071426]" : "text-white/60"}`}
+                className={`px-3 py-1.5 ${ver === "analizada" ? "bg-ink text-white" : "text-ink-muted"}`}
               >
                 Analizada
               </button>
@@ -530,7 +530,7 @@ function Lightbox({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex size-10 items-center justify-center rounded-full border border-white/15 hover:bg-white/8"
+            className="inline-flex size-10 items-center justify-center rounded-full border border-line hover:bg-ink/5"
             aria-label="Cerrar"
           >
             <X className="size-4" />
