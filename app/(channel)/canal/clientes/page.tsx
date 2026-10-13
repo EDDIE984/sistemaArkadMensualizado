@@ -79,7 +79,7 @@ function OrderCard({ order: o, term }: { order: ChannelOrderResult; term: string
             <p className="text-xs text-ink-subtle">{o.identification ?? "Sin identificación"}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <StatusPill status={o.status} policy={o.policyNumber} />
+            <StatusPill status={o.status} policy={o.policyNumber} policyStatus={o.policyStatus} />
             <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-muted px-2.5 py-0.5 text-[11px] text-ink-muted">
               <FileText className="size-3 text-brand-text" aria-hidden="true" />{o.certificateNumber ?? "Sin certificado"}
             </span>

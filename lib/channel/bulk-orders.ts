@@ -232,9 +232,9 @@ export async function buildBulkTemplate(catalog: BulkCatalog) {
 
 // ── Lectura y validación ─────────────────────────────────────────────────────
 
-const norm = (v: string) => v.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\*/g, "").trim().toLowerCase();
+export const norm = (v: string) => v.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\*/g, "").trim().toLowerCase();
 
-function cellText(value: ExcelJS.CellValue): string {
+export function cellText(value: ExcelJS.CellValue): string {
   if (value === null || value === undefined) return "";
   if (value instanceof Date) return value.toISOString().slice(0, 10);
   if (typeof value === "object") {
@@ -253,7 +253,7 @@ function toIsoDate(v: string) {
   return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : v;
 }
 
-function restoreLeadingZero(v: string, lengths: number[]) {
+export function restoreLeadingZero(v: string, lengths: number[]) {
   const digits = v.replace(/\.0+$/, "");
   return /^\d+$/.test(digits) && lengths.includes(digits.length) ? `0${digits}` : digits;
 }

@@ -54,6 +54,7 @@ export type ChannelOrderResult = {
   insurer: string | null;
   status: string;
   policyNumber: string | null;
+  policyStatus: string | null;
   certificateNumber: string | null;
   monthlyPayment: string;
   start: string | null;
@@ -68,7 +69,7 @@ export async function searchRegisteredOrders(channelId: string, term: string) {
     `select c.id, cl.nombre_razon_social as client, cl.identificacion as identification, cl.email, cl.telefono as phone,
             v.marca as brand, v.modelo as model, v.anio as year, v.placa as plate,
             p.nombre as product, a.nombre_comercial as insurer, c.estado as status,
-            po.numero_poliza as "policyNumber", cc.numero as "certificateNumber",
+            po.numero_poliza as "policyNumber", po.estado as "policyStatus", cc.numero as "certificateNumber",
             c.cuota_fija_mensual::text as "monthlyPayment",
             c.fecha_inicio_vigencia::text as start, c.fecha_fin_vigencia::text as "end"
      ${FROM}
@@ -80,4 +81,34 @@ export async function searchRegisteredOrders(channelId: string, term: string) {
     params(channelId, term),
   );
   return { orders: rows.slice(0, ORDER_SEARCH_LIMIT), more: rows.length > ORDER_SEARCH_LIMIT };
+}
+
+export type ActivePolicyResult = {
+  policyId: string;
+  policyNumber: string;
+  client: string;
+  identification: string | null;
+  brand: string | null;
+  model: string | null;
+  plate: string | null;
+  product: string | null;
+  issuedOn: string;
+  start: string;
+  end: string;
+};
+
+/** Pólizas VIGENTES del canal que coinciden con el texto (búsqueda también por número de póliza). */
+export async function searchActivePolicies(channelId: string, term: string) {
+  const { rows } = await getDbPool().query<ActivePolicyResult>(
+    `select po.id as "policyId", po.numero_poliza as "policyNumber", cl.nombre_razon_social as client, cl.identificacion as identification,
+            v.marca as brand, v.modelo as model, v.placa as plate, p.nombre as product,
+            po.fecha_emision::text as "issuedOn", po.fecha_inicio_vigencia::text as start, po.fecha_fin_vigencia::text as "end"
+     ${FROM}
+     join poliza po on po.cotizacion_id = c.id
+     where c.canal_id = $1 and po.estado = 'VIGENTE' and (${MATCH} or po.numero_poliza ilike $2)
+     order by po.fecha_emision desc
+     limit ${ORDER_SEARCH_LIMIT + 1}`,
+    params(channelId, term),
+  );
+  return { policies: rows.slice(0, ORDER_SEARCH_LIMIT), more: rows.length > ORDER_SEARCH_LIMIT };
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Building2, CalendarRange, Car, CircleDollarSign, Eye, FileText, History, Mail, MessageCircle, ShieldCheck, UserRound, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Ban, Building2, CalendarRange, Car, CircleDollarSign, Eye, FileText, History, Mail, MessageCircle, ShieldCheck, UserRound, type LucideIcon } from "lucide-react";
 import { ResendCertificateButton } from "@/components/channel/resend-certificate-button";
 import { StatusPill } from "@/components/channel/order-status-pill";
 import { requireChannelUser } from "@/lib/auth/session";
@@ -20,6 +20,7 @@ type Order = {
   producto: string; aseguradora: string; canal: string | null; agente: string | null;
   cert_id: string | null; cert_numero: string | null; cert_canal: string | null; cert_destino: string | null; cert_enviado_en: string | null; cert_usuario: string | null;
   poliza_numero: string | null; poliza_estado: string | null; poliza_emision: string | null; poliza_inicio: string | null; poliza_fin: string | null;
+  poliza_cancelacion: string | null; cancel_cuota_desde: number | null; cancel_motivo: string | null; cancel_registrada: string | null;
 };
 type Installment = { numero_cuota: number; fecha_vencimiento: string; monto: string; estado: string; pagos: { fecha: string; monto: string; metodo: string | null; referencia: string | null }[] };
 
@@ -40,7 +41,9 @@ export default async function Page({ params, searchParams }: { params: Promise<{
             cc.id as cert_id, cc.numero as cert_numero, cc.canal_envio as cert_canal, cc.destino as cert_destino,
             cc.enviado_en::text as cert_enviado_en, cu.nombre as cert_usuario,
             po.numero_poliza as poliza_numero, po.estado as poliza_estado, po.fecha_emision::text as poliza_emision,
-            po.fecha_inicio_vigencia::text as poliza_inicio, po.fecha_fin_vigencia::text as poliza_fin
+            po.fecha_inicio_vigencia::text as poliza_inicio, po.fecha_fin_vigencia::text as poliza_fin,
+            po.fecha_cancelacion::text as poliza_cancelacion, cp.cuota_desde as cancel_cuota_desde, cp.motivo as cancel_motivo,
+            cp.creado_en::text as cancel_registrada
      from cotizacion c
      left join certificado_cobertura cc on cc.cotizacion_id = c.id
      join cliente cl on cl.id = c.cliente_id
@@ -53,6 +56,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
      left join usuario u on u.id = c.usuario_id
      left join usuario cu on cu.id = cc.enviado_por_usuario_id
      left join poliza po on po.cotizacion_id = c.id
+     left join cancelacion_poliza cp on cp.poliza_id = po.id
      where c.id = $1 and c.canal_id = $2`,
     [id, s.channelId],
   );
@@ -91,6 +95,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const cobranza = installments.rows;
   const paid = cobranza.filter((c) => c.estado === "PAGADO");
   const overdue = cobranza.filter((c) => c.estado === "VENCIDO");
+  const cancelled = cobranza.filter((c) => c.estado === "CANCELADA");
   const paidAmount = cobranza.flatMap((c) => c.pagos).reduce((t, p) => t + Number(p.monto), 0);
   // Una corrección de la orden reescribe el registro del certificado con su envío; en ese
   // caso el envío inicial ya no está disponible y la corrección figura en la auditoría.
@@ -112,7 +117,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           <h1 className="mt-1.5 truncate text-2xl font-bold tracking-[-0.03em] sm:text-3xl">{o.cliente}</h1>
           <p className="mt-1 text-sm text-ink-muted">{o.identificacion ?? "Sin identificación"} · {o.marca} {o.modelo}{o.placa ? ` · ${o.placa.toUpperCase()}` : ""}</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <StatusPill status={o.estado} policy={o.poliza_numero} />
+            <StatusPill status={o.estado} policy={o.poliza_numero} policyStatus={o.poliza_estado} />
             <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-muted px-2.5 py-0.5 text-[11px] text-ink-muted"><FileText className="size-3 text-brand-text" />{o.cert_numero ? `Certificado ${o.cert_numero}` : "Sin certificado"}</span>
           </div>
         </div>
@@ -121,6 +126,19 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           <ResendCertificateButton variant="button" quoteId={o.id} client={o.cliente} certificateNumber={o.cert_numero} email={o.email} phone={o.telefono ? normalizeEcuadorPhone(o.telefono) : null} />
         </div>}
       </header>
+
+      {o.poliza_cancelacion && (
+        <section role="status" className="mt-4 flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-800 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white text-red-600"><Ban className="size-5" /></span>
+            <div>
+              <p className="text-sm font-bold">Póliza cancelada desde {monthLabel(o.poliza_cancelacion)}{o.cancel_cuota_desde ? ` · a partir de la cuota ${o.cancel_cuota_desde}` : ""}</p>
+              <p className="mt-0.5 text-xs">Emitida el {day(o.poliza_emision)} · Cancelada desde el {day(o.poliza_cancelacion)}{o.cancel_registrada ? ` · Registrada el ${dateTime(o.cancel_registrada)}` : ""}</p>
+              {o.cancel_motivo && <p className="mt-1 text-xs"><span className="font-semibold">Motivo:</span> {o.cancel_motivo}</p>}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Datos */}
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -135,7 +153,8 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         ]} />
         <Card icon={Building2} title="Producto" rows={[
           ["Producto", o.producto], ["Aseguradora", o.aseguradora], ["Canal", nice(o.canal)], ["Agente", o.agente],
-          ["Registrada el", dateTime(o.creado_en)], ...(o.poliza_numero ? [["Póliza", `${o.poliza_numero} · ${nice(o.poliza_estado)}`], ["Emitida el", day(o.poliza_emision)]] as [string, string | null][] : []),
+          ["Registrada el", dateTime(o.creado_en)], ...(o.poliza_numero ? [["Póliza", `${o.poliza_numero} · ${nice(o.poliza_estado)}`], ["Emitida el", day(o.poliza_emision)],
+            ...(o.poliza_cancelacion ? [["Cancelada desde", `${day(o.poliza_cancelacion)}${o.cancel_cuota_desde ? ` (cuota ${o.cancel_cuota_desde})` : ""}`]] : [])] as [string, string | null][] : []),
         ]} />
         <Card icon={CalendarRange} title="Vigencia y riesgo" rows={[
           ["Inicio de vigencia", day(o.poliza_inicio ?? o.inicio)], ["Fin de vigencia", day(o.poliza_fin ?? o.fin)],
@@ -169,18 +188,22 @@ export default async function Page({ params, searchParams }: { params: Promise<{
 
         {o.poliza_numero ? (
           <>
-            <div className="mt-4 grid gap-3 sm:grid-cols-4">
+            <div className={`mt-4 grid gap-3 ${cancelled.length ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
               <Kpi label="Pagadas" value={String(paid.length)} tone="good" />
-              <Kpi label="Pendientes" value={String(cobranza.length - paid.length - overdue.length)} />
+              <Kpi label="Pendientes" value={String(cobranza.length - paid.length - overdue.length - cancelled.length)} />
+              {cancelled.length > 0 && <Kpi label="Canceladas" value={String(cancelled.length)} />}
               <Kpi label="Vencidas" value={String(overdue.length)} tone={overdue.length ? "bad" : undefined} />
               <Kpi label="Monto pagado" value={money(paidAmount)} />
             </div>
             <Table head={["Cuota", "Vencimiento", "Monto", "Estado", "Pagos registrados"]}>
               {cobranza.map((c) => (
-                <tr key={c.numero_cuota}>
-                  <td className="px-3 py-2.5 font-semibold text-ink-subtle">{c.numero_cuota}</td>
+                <tr key={c.numero_cuota} className={c.estado === "CANCELADA" ? "bg-surface-muted/60 text-ink-subtle" : ""}>
+                  <td className="px-3 py-2.5 font-semibold text-ink-subtle">
+                    {c.numero_cuota}
+                    {c.numero_cuota === o.cancel_cuota_desde && <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">Cancelada desde aquí</span>}
+                  </td>
                   <td className="px-3 py-2.5">{day(c.fecha_vencimiento)}</td>
-                  <td className="px-3 py-2.5 font-semibold">{money(c.monto)}</td>
+                  <td className={`px-3 py-2.5 font-semibold ${c.estado === "CANCELADA" ? "line-through" : ""}`}>{money(c.monto)}</td>
                   <td className="px-3 py-2.5"><InstallmentPill estado={c.estado} /></td>
                   <td className="px-3 py-2.5 text-ink-muted">{c.pagos.length ? c.pagos.map((p, i) => <span key={i} className="block">{day(p.fecha)} · {money(p.monto)}{p.metodo ? ` · ${p.metodo}` : ""}{p.referencia ? ` · Ref. ${p.referencia}` : ""}</span>) : "—"}</td>
                 </tr>
@@ -271,7 +294,7 @@ function Table({ head, children }: { head: string[]; children: React.ReactNode }
 }
 
 function InstallmentPill({ estado }: { estado: string }) {
-  const cls = estado === "PAGADO" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : estado === "VENCIDO" ? "border-red-200 bg-red-50 text-red-700" : "border-amber-200 bg-amber-50 text-amber-700";
+  const cls = estado === "PAGADO" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : estado === "VENCIDO" ? "border-red-200 bg-red-50 text-red-700" : estado === "CANCELADA" ? "border-line bg-surface-muted text-ink-muted" : "border-amber-200 bg-amber-50 text-amber-700";
   return <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${cls}`}>{nice(estado)}</span>;
 }
 
@@ -282,6 +305,10 @@ function day(v: string | null) {
   if (!v) return "—";
   const [y, m, d] = v.slice(0, 10).split("-");
   return `${d}/${m}/${y}`;
+}
+function monthLabel(v: string) {
+  const [y, m] = v.split("-");
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("es-EC", { month: "long", year: "numeric" });
 }
 function dateTime(v: string) {
   return new Date(v).toLocaleString("es-EC", { timeZone: "America/Guayaquil", dateStyle: "medium", timeStyle: "short" });

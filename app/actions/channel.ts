@@ -15,6 +15,8 @@ import type { ChannelActionState } from "@/lib/channel/action-state";
 import { clientSchema, dateOnly } from "@/lib/channel/schemas";
 import { BULK_MAX_BYTES, loadBulkCatalog, parseBulkWorkbook, saveBulkOrders, validateBulkRows, verifyBulkEmails, type BulkRowResult } from "@/lib/channel/bulk-orders";
 import type { QuoteActionState } from "@/lib/quotes/types";
+import { cancelPolicy, CancellationError } from "@/lib/policies/cancel-policy";
+import { parseCancellationWorkbook, saveCancellations, validateCancellationRows, type CancellationRowResult } from "@/lib/channel/bulk-cancellations";
 
 export async function saveAssistedClient(_:ChannelActionState,formData:FormData):Promise<ChannelActionState>{const session=await requireChannelUser();const parsed=clientSchema.safeParse({name:formData.get("name"),identification:formData.get("identification"),email:formData.get("email"),phone:formData.get("phone"),cityId:formData.get("cityId"),birthDate:formData.get("birthDate"),gender:formData.get("gender"),maritalStatus:formData.get("maritalStatus"),address:formData.get("address")||""});if(!parsed.success)return{status:"error",message:"Revisa los datos del cliente.",fields:parsed.error.flatten().fieldErrors as Record<string,string[]>};const db=createAdminClient();const{data:existing}=await db.from("cliente").select("id,nombre_razon_social,email,identificacion").or(`identificacion.eq.${parsed.data.identification},email.ilike.${parsed.data.email}`).limit(1).maybeSingle();let clientId=existing?.id;if(!clientId){const{data,error}=await db.from("cliente").insert({tipo_cliente:"INDIVIDUAL",nombre_razon_social:parsed.data.name,identificacion:parsed.data.identification,email:parsed.data.email,password_hash:null,telefono:parsed.data.phone,ciudad_id:parsed.data.cityId,direccion:parsed.data.address||null,fecha_nacimiento:parsed.data.birthDate,genero:parsed.data.gender,estado_civil:parsed.data.maritalStatus.toUpperCase(),activo:true,estado_registro:"SIN_ACCESO"}).select("id").single();if(error)return{status:"error",message:error.code==="23505"?"Ya existe un cliente con esa identificación o correo.":"No pudimos registrar al cliente."};clientId=data.id;}const{error:linkError}=await db.from("canal_cliente").upsert({canal_id:session.channelId!,cliente_id:clientId,creado_por_usuario_id:session.actorId},{onConflict:"canal_id,cliente_id"});if(linkError)return{status:"error",message:"El cliente existe, pero no pudimos vincularlo con el canal."};await db.from("auditoria").insert({entidad:existing?"CANAL_CLIENTE":"CLIENTE",entidad_id:clientId,accion:"CREACION",datos_nuevos:{canal_id:session.channelId,origen:"CANAL",cliente_nuevo:!existing},usuario_id:session.actorId});revalidatePath("/canal/clientes");return{status:"success",message:existing?`Cliente existente vinculado: ${existing.nombre_razon_social}.`:"Cliente registrado y vinculado correctamente.",clientId};}
 
@@ -365,4 +367,79 @@ export async function resendCertificate(quoteId: string, channel: DeliveryChanne
   } finally {
     conn.release();
   }
+}
+
+// ── Cancelaciones de pólizas (regla 18 del ER) ──────────────────────────────
+export type CancellationState = { status: "idle" } | { status: "error"; message: string };
+
+const cancellationSchema = z.object({
+  policyId: z.string().uuid(),
+  month: z.string().regex(/^\d{4}-\d{2}$/, "Selecciona el mes de cancelación."),
+  reason: z.string().trim().max(300, "Motivo: máximo 300 caracteres.").optional(),
+});
+
+export async function confirmCancellation(input: { policyId: string; month: string; reason?: string }): Promise<CancellationState> {
+  const session = await requireChannelUser();
+  const parsed = cancellationSchema.safeParse(input);
+  if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  try {
+    await cancelPolicy({ ...parsed.data, origin: "INDIVIDUAL", channelId: session.channelId!, userId: session.actorId });
+  } catch (error) {
+    if (error instanceof CancellationError) return { status: "error", message: error.message };
+    console.error("Error al cancelar la póliza", error);
+    return { status: "error", message: "No pudimos cancelar la póliza. No se guardó ningún cambio." };
+  }
+  revalidatePath("/canal/cancelaciones");
+  revalidatePath("/canal");
+  redirect("/canal/cancelaciones?registradas=1");
+}
+
+export type CancellationUploadState = { status: "idle" | "ready" | "error"; message?: string; rows: CancellationRowResult[] };
+
+export async function validateCancellationUpload(_: CancellationUploadState, formData: FormData): Promise<CancellationUploadState> {
+  const session = await requireChannelUser();
+  const file = formData.get("file");
+  if (!(file instanceof File) || !file.size) return { status: "error", message: "Selecciona el archivo de la plantilla.", rows: [] };
+  if (file.size > BULK_MAX_BYTES) return { status: "error", message: "El archivo supera los 5 MB.", rows: [] };
+  const { rows, error } = await parseCancellationWorkbook(await file.arrayBuffer());
+  if (error) return { status: "error", message: error, rows: [] };
+  if (!rows.length) return { status: "error", message: "El archivo no tiene filas con datos.", rows: [] };
+  try {
+    const { results } = await validateCancellationRows(rows, { insurerId: session.insurerId!, channelId: session.channelId! });
+    const bad = results.filter((r) => r.errors.length).length;
+    return { status: "ready", message: bad ? `${bad} de ${results.length} filas tienen errores.` : `${results.length} filas listas para cancelar.`, rows: results };
+  } catch (error) {
+    console.error("Error al validar la carga de cancelaciones", error);
+    return { status: "error", message: "No pudimos validar el archivo. Inténtalo nuevamente.", rows: [] };
+  }
+}
+
+export async function saveCancellationUpload(input: { rows: CancellationRowResult[] }): Promise<CancellationUploadState> {
+  const session = await requireChannelUser();
+  if (!input.rows.length) return { status: "error", message: "No hay filas para guardar.", rows: [] };
+  if (input.rows.length > 100) return { status: "error", message: "Máximo 100 filas por carga.", rows: input.rows };
+  const scope = { insurerId: session.insurerId!, channelId: session.channelId!, userId: session.actorId };
+  let saved = 0;
+  try {
+    // Se revalida todo en el servidor: no se confía en la vista previa del navegador.
+    const { results, policyOf } = await validateCancellationRows(input.rows.map((r) => ({ row: r.row, data: r.data, errors: [] })), scope);
+    const bad = results.filter((r) => r.errors.length).length;
+    if (bad) return { status: "error", message: `No se canceló ninguna póliza: ${bad} ${bad === 1 ? "fila tiene" : "filas tienen"} errores.`, rows: results };
+    const items = results.map((r) => ({ row: r.row, policyId: policyOf.get(r.row)!, month: r.preview!.month, reason: r.data.reason }));
+    const result = await saveCancellations(items, scope);
+    if (!result.saved) {
+      return {
+        status: "error",
+        message: `No se canceló ninguna póliza: ${result.errors.size} ${result.errors.size === 1 ? "fila falló" : "filas fallaron"}.`,
+        rows: results.map((r) => (result.errors.has(r.row) ? { ...r, errors: [result.errors.get(r.row)!], preview: undefined } : r)),
+      };
+    }
+    saved = result.saved;
+  } catch (error) {
+    console.error("Error al guardar la carga de cancelaciones", error);
+    return { status: "error", message: "No pudimos guardar la carga. No se canceló ninguna póliza.", rows: input.rows };
+  }
+  revalidatePath("/canal/cancelaciones");
+  revalidatePath("/canal");
+  redirect(`/canal/cancelaciones?registradas=${saved}`);
 }
