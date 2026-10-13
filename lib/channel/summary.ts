@@ -4,8 +4,10 @@ import { getDbPool } from "@/lib/db/pool";
 
 /*
  * Tablero del canal (Resumen). Todo se filtra por `cotizacion.canal_id`.
- * "Emitido" = póliza emitida por la aseguradora (`poliza.fecha_emision`).
- * Comisión = `amortizacion_mensual.comision_canal` de esas pólizas (vigencia completa).
+ * "Emitido" = póliza emitida por la aseguradora (`poliza.fecha_emision`): vehículos, clientes, marcas.
+ * "Producción" = cuotas de toda la cartera del canal que vencen en el período
+ * (`tabla_cobranza.fecha_vencimiento`), con su desglose de `amortizacion_mensual`; sin las
+ * cuotas canceladas (regla 18). Prima y comisión del tablero y del Excel salen de aquí.
  */
 
 export type Period = { from: string; to: string };
@@ -15,23 +17,32 @@ const TZ_TODAY = "(now() at time zone 'America/Guayaquil')::date";
 /** Pólizas del canal emitidas en el período (CTE reutilizable). $1 canal, $2 desde, $3 hasta. */
 const ISSUED = `
   issued as (
-    select po.id as poliza_id, po.numero_poliza, po.fecha_emision, po.fecha_inicio_vigencia, po.fecha_fin_vigencia, po.estado as poliza_estado,
-           c.id as cotizacion_id, c.cliente_id, c.producto_id, c.vehiculo_id, c.cuota_fija_mensual,
-           (select coalesce(sum(m.cuota_fija), 0) from amortizacion_mensual m where m.cotizacion_id = c.id) as prima,
-           (select coalesce(sum(m.comision_canal), 0) from amortizacion_mensual m where m.cotizacion_id = c.id) as comision
+    select po.id as poliza_id, po.fecha_emision, c.cliente_id, c.producto_id, c.vehiculo_id
     from poliza po
     join cotizacion c on c.id = po.cotizacion_id
     where c.canal_id = $1 and po.fecha_emision between $2::date and $3::date
+  )`;
+
+/** Cuotas de la cartera del canal que vencen en el período, con su desglose (CTE reutilizable). $1 canal, $2 desde, $3 hasta. */
+const PRODUCTION = `
+  production as (
+    select po.id as poliza_id, c.id as cotizacion_id, c.cliente_id, c.producto_id, c.vehiculo_id, t.fecha_vencimiento,
+           m.prima_neta_mes, m.super_bancos, m.seguro_campesino, m.derechos_emision, m.subtotal, m.iva, m.prima_total_mes, m.comision_canal
+    from poliza po
+    join cotizacion c on c.id = po.cotizacion_id
+    join tabla_cobranza t on t.poliza_id = po.id
+    join amortizacion_mensual m on m.cotizacion_id = c.id and m.mes = t.numero_cuota
+    where c.canal_id = $1 and t.estado <> 'CANCELADA' and t.fecha_vencimiento between $2::date and $3::date
   )`;
 
 export type SummaryKpis = { vehicles: number; clients: number; commission: number; premium: number };
 
 async function kpis(channelId: string, p: Period): Promise<SummaryKpis> {
   const { rows } = await getDbPool().query(
-    `with ${ISSUED}
-     select count(*)::int as vehicles, count(distinct cliente_id)::int as clients,
-            coalesce(sum(comision), 0)::float as commission, coalesce(sum(prima), 0)::float as premium
-     from issued`,
+    `with ${ISSUED}, ${PRODUCTION}
+     select (select count(*)::int from issued) as vehicles, (select count(distinct cliente_id)::int from issued) as clients,
+            (select coalesce(sum(comision_canal), 0)::float from production) as commission,
+            (select coalesce(sum(prima_neta_mes), 0)::float from production) as premium`,
     [channelId, p.from, p.to],
   );
   return rows[0];
@@ -50,33 +61,50 @@ export function previousPeriod(p: Period): Period {
 export async function getSummary(channelId: string, period: Period, expiry: Period) {
   const db = getDbPool();
   const args = [channelId, period.from, period.to];
-  const [current, previous, pending, portfolio, products, monthly, brands, expiring, expiringByMonth] = await Promise.all([
+  const [current, previous, future, pending, portfolio, products, monthly, brands, expiring, expiringByMonth] = await Promise.all([
     kpis(channelId, period),
     kpis(channelId, previousPeriod(period)),
+    // Comisiones futuras: cuotas por vencer de toda la cartera del canal, sin las canceladas.
+    db.query<{ commission: number; policies: number }>(
+      `select coalesce(sum(m.comision_canal), 0)::float as commission, count(distinct po.id)::int as policies
+       from poliza po
+       join cotizacion c on c.id = po.cotizacion_id
+       join tabla_cobranza t on t.poliza_id = po.id
+       join amortizacion_mensual m on m.cotizacion_id = c.id and m.mes = t.numero_cuota
+       where c.canal_id = $1 and t.estado <> 'CANCELADA' and t.fecha_vencimiento > ${TZ_TODAY}`,
+      [channelId],
+    ),
     db.query(`select count(*)::int as n from cotizacion where canal_id = $1 and estado = 'PENDIENTE'`, [channelId]),
     db.query(`select count(*)::int as n from canal_cliente where canal_id = $1`, [channelId]),
-    // Todos los productos del canal (aunque no tengan pólizas en el período).
-    db.query<{ id: string; name: string; insurer: string; vehicles: number; clients: number; premium: number; commission: number }>(
-      `with ${ISSUED}
+    // Todos los productos del canal (aunque no tengan movimiento). `vehicles` = emitidos en el período;
+    // `policies`/`clients` y montos = producción (cuotas que vencen en el período).
+    db.query<{ id: string; name: string; insurer: string; vehicles: number; policies: number; clients: number; net: number; total: number; commission: number }>(
+      `with ${ISSUED}, ${PRODUCTION},
+       prod as (
+         select producto_id, count(distinct poliza_id)::int as policies, count(distinct cliente_id)::int as clients,
+                sum(prima_neta_mes)::float as net, sum(prima_total_mes)::float as total, sum(comision_canal)::float as commission
+         from production group by producto_id
+       ),
+       iss as (select producto_id, count(*)::int as vehicles from issued group by producto_id)
        select p.id, p.nombre as name, a.nombre_comercial as insurer,
-              count(i.poliza_id)::int as vehicles, count(distinct i.cliente_id)::int as clients,
-              coalesce(sum(i.prima), 0)::float as premium, coalesce(sum(i.comision), 0)::float as commission
+              coalesce(iss.vehicles, 0) as vehicles, coalesce(prod.policies, 0) as policies, coalesce(prod.clients, 0) as clients,
+              coalesce(prod.net, 0) as net, coalesce(prod.total, 0) as total, coalesce(prod.commission, 0) as commission
        from producto p
        join aseguradora a on a.id = p.aseguradora_id
-       left join issued i on i.producto_id = p.id
+       left join prod on prod.producto_id = p.id
+       left join iss on iss.producto_id = p.id
        where p.canal_id = $1
-       group by p.id, a.nombre_comercial
-       order by vehicles desc, p.nombre`,
+       order by policies desc, vehicles desc, p.nombre`,
       args,
     ),
-    // Un registro por mes del período, con 0 donde no hubo emisiones.
+    // Un registro por mes del período, con 0 donde no hubo emisiones ni cuotas.
     db.query<{ month: string; vehicles: number; commission: number }>(
-      `with ${ISSUED},
+      `with ${ISSUED}, ${PRODUCTION},
        months as (select generate_series(date_trunc('month', $2::date), date_trunc('month', $3::date), interval '1 month')::date as m)
        select to_char(months.m, 'YYYY-MM') as month,
-              count(i.poliza_id)::int as vehicles, coalesce(sum(i.comision), 0)::float as commission
-       from months left join issued i on date_trunc('month', i.fecha_emision) = months.m
-       group by months.m order by months.m`,
+              (select count(*)::int from issued i where date_trunc('month', i.fecha_emision) = months.m) as vehicles,
+              (select coalesce(sum(x.comision_canal), 0)::float from production x where date_trunc('month', x.fecha_vencimiento) = months.m) as commission
+       from months order by months.m`,
       args,
     ),
     db.query<{ brand: string; vehicles: number }>(
@@ -100,6 +128,8 @@ export async function getSummary(channelId: string, period: Period, expiry: Peri
   return {
     current,
     previous,
+    futureCommission: future.rows[0].commission,
+    futurePolicies: future.rows[0].policies,
     pendingOrders: pending.rows[0].n as number,
     portfolioClients: portfolio.rows[0].n as number,
     products: products.rows,
@@ -133,29 +163,38 @@ export async function getExpiring(channelId: string, w: Period): Promise<Expirin
   return rows;
 }
 
-export type IssuedDetail = {
+export type ProductionDetail = {
   client: string; identification: string | null; email: string | null; phone: string | null; city: string | null;
   brand: string; model: string; year: number | null; color: string | null; plate: string | null; insuredValue: number;
-  product: string; insurer: string; policy: string; issued: string; start: string; end: string;
-  monthly: number; premium: number; commission: number;
+  product: string; insurer: string; policy: string; issued: string; start: string; end: string; installments: number;
+  net: number; superBancos: number; seguroCampesino: number; derechosEmision: number;
+  subtotal: number; iva: number; total: number; commission: number;
 };
 
-/** Detalle de vehículos y clientes con póliza emitida en el período (para la descarga). */
-export async function getIssuedDetail(channelId: string, p: Period): Promise<IssuedDetail[]> {
-  const { rows } = await getDbPool().query<IssuedDetail>(
-    `with ${ISSUED}
+/** Producción del período por póliza (para la descarga): suma de sus cuotas que vencen en el período. */
+export async function getProductionDetail(channelId: string, p: Period): Promise<ProductionDetail[]> {
+  const { rows } = await getDbPool().query<ProductionDetail>(
+    `with ${PRODUCTION},
+     per_policy as (
+       select poliza_id, cliente_id, producto_id, vehiculo_id, count(*)::int as installments,
+              sum(prima_neta_mes)::float as net, sum(super_bancos)::float as "superBancos", sum(seguro_campesino)::float as "seguroCampesino",
+              sum(derechos_emision)::float as "derechosEmision", sum(subtotal)::float as subtotal, sum(iva)::float as iva,
+              sum(prima_total_mes)::float as total, sum(comision_canal)::float as commission
+       from production group by poliza_id, cliente_id, producto_id, vehiculo_id
+     )
      select cl.nombre_razon_social as client, cl.identificacion as identification, cl.email, cl.telefono as phone, ci.nombre as city,
             v.marca as brand, v.modelo as model, v.anio as year, v.color, v.placa as plate, v.valor_asegurado::float as "insuredValue",
-            pr.nombre as product, a.nombre_comercial as insurer, i.numero_poliza as policy,
-            i.fecha_emision::text as issued, i.fecha_inicio_vigencia::text as start, i.fecha_fin_vigencia::text as "end",
-            i.cuota_fija_mensual::float as monthly, i.prima::float as premium, i.comision::float as commission
-     from issued i
-     join cliente cl on cl.id = i.cliente_id
+            pr.nombre as product, a.nombre_comercial as insurer, po.numero_poliza as policy,
+            po.fecha_emision::text as issued, po.fecha_inicio_vigencia::text as start, po.fecha_fin_vigencia::text as "end",
+            x.installments, x.net, x."superBancos", x."seguroCampesino", x."derechosEmision", x.subtotal, x.iva, x.total, x.commission
+     from per_policy x
+     join poliza po on po.id = x.poliza_id
+     join cliente cl on cl.id = x.cliente_id
      left join ciudad ci on ci.id = cl.ciudad_id
-     join vehiculo v on v.id = i.vehiculo_id
-     join producto pr on pr.id = i.producto_id
+     join vehiculo v on v.id = x.vehiculo_id
+     join producto pr on pr.id = x.producto_id
      join aseguradora a on a.id = pr.aseguradora_id
-     order by i.fecha_emision desc, cl.nombre_razon_social`,
+     order by po.fecha_emision desc, cl.nombre_razon_social`,
     [channelId, p.from, p.to],
   );
   return rows;

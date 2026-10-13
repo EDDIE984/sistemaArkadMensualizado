@@ -132,6 +132,9 @@ erDiagram
 
     POLIZA ||--o{ TABLA_COBRANZA : genera
     TABLA_COBRANZA ||--o{ PAGO : recibe
+    POLIZA ||--o| CANCELACION_POLIZA : "se cancela (opcional)"
+    CANCELACION_POLIZA ||--|| NIVELACION : genera
+    USUARIO ||--o{ CANCELACION_POLIZA : registra
 
     AUDITORIA }o--|| USUARIO : registrada_por
 
@@ -532,6 +535,7 @@ erDiagram
         date fecha_inicio_vigencia
         date fecha_fin_vigencia
         string estado "VIGENTE|VENCIDA|CANCELADA"
+        date fecha_cancelacion "nullable; primer día del mes de cancelación"
     }
 
     TABLA_COBRANZA {
@@ -540,7 +544,31 @@ erDiagram
         int numero_cuota
         date fecha_vencimiento
         decimal monto
-        string estado "PENDIENTE|PAGADO|VENCIDO"
+        string estado "PENDIENTE|PAGADO|VENCIDO|CANCELADA"
+    }
+
+    CANCELACION_POLIZA {
+        uuid id PK
+        uuid poliza_id FK "unique"
+        uuid canal_id FK
+        date mes_cancelacion "día 1 del mes"
+        int cuota_desde "primera cuota cancelada"
+        int cuotas_canceladas
+        string motivo "nullable"
+        string origen "INDIVIDUAL|EXCEL"
+        uuid usuario_id FK
+        timestamp creado_en
+    }
+
+    NIVELACION {
+        uuid id PK
+        uuid cancelacion_id FK "unique"
+        uuid poliza_id FK
+        int cuota_desde
+        int cuota_hasta
+        decimal valor "suma de nivelacion_acumulada de las cuotas canceladas"
+        string estado "PENDIENTE"
+        timestamp creado_en
     }
 
     PAGO {
@@ -775,6 +803,20 @@ sequenceDiagram
     Note over DB: Pagos futuros → INSERT PAGO ligado a cada cobranza_id
 ```
 
+### Variante: cancelación de póliza y nivelación (canal)
+
+El `USUARIO_CANAL` cancela pólizas `VIGENTE` de su canal desde el menú
+**Cancelaciones**: primero "Registrar cancelación" y luego elige
+**Cancelación individual** (busca y selecciona una emisión) o **Carga masiva
+desde Excel** (plantilla con cédula + placa + producto + mes de cancelación +
+motivo opcional; validación previa y guardado todo o nada). En una transacción:
+
+1. Se calcula `cuota_desde` = primera cuota de `TABLA_COBRANZA` cuya
+   `fecha_vencimiento` cae en el mes de cancelación o después.
+2. `TABLA_COBRANZA.estado = 'CANCELADA'` para las cuotas `>= cuota_desde`.
+3. `POLIZA.estado = 'CANCELADA'`, `POLIZA.fecha_cancelacion = mes de cancelación`.
+4. `INSERT CANCELACION_POLIZA` + `INSERT NIVELACION` + `AUDITORIA`.
+
 ### Variante: inspección fotográfica de la cotización (informativa)
 
 Una vez creada la `COTIZACION`, en su pantalla de detalle aparece un botón
@@ -960,8 +1002,14 @@ vía `datos_nuevos.accion`), no cada foto ni cada daño.
     `cuota_fija_mensual`, `prima_total_mes`, `subtotal`, `iva`, impuestos ni
     ningún número que vea el cliente; solo sirve para liquidar al canal, para
     los indicadores del panel de la aseguradora y para el Resumen del propio
-    canal, que ve **solo su comisión de pólizas ya emitidas** (suma de
-    `comision_canal` de la vigencia completa, por fecha de emisión). Un producto sin comisión
+    canal, que ve **solo su comisión de pólizas ya emitidas**. En el Resumen,
+    prima y comisión corresponden a la **producción del período filtrado**: las
+    cuotas (`TABLA_COBRANZA.fecha_vencimiento` dentro del período, estado distinto
+    de `CANCELADA`) de toda la cartera del canal, con el desglose de su fila de
+    `AMORTIZACION_MENSUAL` (prima neta, super de bancos, seguro campesino,
+    derechos de emisión, subtotal, IVA, prima total y comisión); la descarga Excel
+    lo detalla por póliza con los mismos montos. Vehículos y clientes del Resumen
+    siguen contando pólizas emitidas en el período. Un producto sin comisión
     configurada usa 0. Un producto del canal `INDIVIDUAL` (autogestión) con
     `comision_canal_pct > 0` también la registra, aunque su cotización no tenga
     `canal_id`; por eso debe mantenerse en 0 salvo que se quiera reservar un
@@ -1055,6 +1103,26 @@ vía `datos_nuevos.accion`), no cada foto ni cada daño.
       pendiente ni una que ya tenga póliza.
     - El flujo de autogestión del cliente y el recálculo de la aseguradora no
       generan certificado.
+
+18. **Cancelaciones (canal).** El `USUARIO_CANAL` puede cancelar pólizas
+    `VIGENTE` de su propio canal indicando el **mes de cancelación**.
+    - `cuota_desde` = primera cuota cuya `fecha_vencimiento` cae en ese mes o
+      después; desde esa cuota hasta la última quedan en estado `CANCELADA`.
+    - Se rechaza si el mes es anterior al mes de emisión, si no hay cuotas en
+      o después de ese mes, o si alguna cuota `>= cuota_desde` ya está `PAGADO`.
+    - Una póliza se cancela una sola vez (`CANCELACION_POLIZA.poliza_id` único).
+    - Las cuotas canceladas no cuentan como prima ni comisión del canal (ni
+      emitida ni futura) en los indicadores.
+    - El detalle del cliente muestra la fecha de emisión, la fecha de
+      cancelación y la cuota desde la que se canceló.
+    - Carga por Excel: identifica la póliza por cédula del cliente + placa +
+      producto; es todo o nada (si una fila falla no se cancela ninguna).
+
+19. **Nivelación por cancelación.** Toda cancelación genera un registro en
+    `NIVELACION` con `valor = Σ AMORTIZACION_MENSUAL.nivelacion_acumulada` de
+    los meses `cuota_desde .. cuota_hasta` (las cuotas canceladas). Es un
+    valor **interno**: no se muestra al canal ni al cliente. Queda en estado
+    `PENDIENTE` hasta que se defina su cobro/visualización.
 
 ---
 
@@ -1153,7 +1221,7 @@ cálculo sin tasa.
 |---|---|
 | `ADMIN_PLATAFORMA` | Crear/editar aseguradoras, crear `ADMIN_ASEGURADORA`, ver todo el sistema |
 | `ADMIN_ASEGURADORA` | Configurar productos, canales, coberturas, cláusulas, tarifas/riesgos de **su** aseguradora; crear `USUARIO_CANAL` propios; ver cotizaciones/pólizas/cobranzas de su aseguradora |
-| `USUARIO_CANAL` | Cotizar y gestionar clientes dentro de su canal/aseguradora asignada; corregir sus Órdenes de Emisión pendientes y regenerar/enviar su certificado |
+| `USUARIO_CANAL` | Cotizar y gestionar clientes dentro de su canal/aseguradora asignada; corregir sus Órdenes de Emisión pendientes y regenerar/enviar su certificado; cancelar pólizas vigentes de su canal (individual o Excel) |
 | `CLIENTE` | Registrarse, cotizar (autogestión), ver sus propias cotizaciones/pólizas/cobranzas, aceptar/rechazar cotizaciones |
 
 ### 6.1 Alcance del panel `ADMIN_PLATAFORMA`

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, BadgeDollarSign, CalendarClock, CarFront, ChevronRight, CircleDollarSign, Download, FileClock, Minus, Package, Users, type LucideIcon } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, BadgeDollarSign, CalendarClock, CarFront, ChevronRight, CircleDollarSign, Download, FileClock, Minus, Package, Users, Wallet, type LucideIcon } from "lucide-react";
 import { AdminPage } from "@/components/admin/admin-ui";
 import { AreaChart, BarList, ColumnChart } from "@/components/channel/summary-charts";
 import { monthLabel } from "@/lib/channel/month-label";
@@ -24,13 +24,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
   const { current: k, previous: prev } = data;
   const download = `/canal/resumen/descargar?${new URLSearchParams({ ...f.periodQs, ...f.expiryQs }).toString()}`;
   const expiryLabel = f.expiryKey === "rango" ? `${day(f.expiry.from)} – ${day(f.expiry.to)}` : `Próximos ${f.expiryKey} días`;
-  const totalVehicles = data.products.reduce((t, p) => t + p.vehicles, 0);
+  const totalNet = data.products.reduce((t, p) => t + p.net, 0);
 
   return (
     <AdminPage
       eyebrow="Resumen del canal"
       title={`Canal ${canal?.nombre ?? "comercial"}`}
-      description="Producción, comisiones y vencimientos de las pólizas emitidas por tu canal."
+      description="Producción, comisiones y vencimientos de las pólizas de tu canal."
     >
       {/* Filtro del período */}
       <section className="glass-panel mt-7 p-4 sm:p-5">
@@ -40,22 +40,26 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
             <Download className="size-4" />Descargar Excel
           </a>
         </div>
-        <p className="mt-3 text-xs text-ink-subtle">Mostrando pólizas emitidas del <span className="font-semibold text-ink-muted">{day(f.period.from)}</span> al <span className="font-semibold text-ink-muted">{day(f.period.to)}</span>.</p>
+        <p className="mt-3 text-xs text-ink-subtle">Del <span className="font-semibold text-ink-muted">{day(f.period.from)}</span> al <span className="font-semibold text-ink-muted">{day(f.period.to)}</span>: vehículos y clientes emitidos; prima y comisión de las cuotas de tu cartera que vencen en esas fechas.</p>
       </section>
 
       {/* KPIs */}
-      <section className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <section className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
         <Kpi icon={CarFront} label="Vehículos emitidos" value={num(k.vehicles)} delta={delta(k.vehicles, prev.vehicles)} />
         <Kpi icon={Users} label="Clientes" value={num(k.clients)} delta={delta(k.clients, prev.clients)} hint={`${num(data.portfolioClients)} en la cartera`} />
-        <Kpi icon={BadgeDollarSign} label="Comisión generada" value={money(k.commission)} delta={delta(k.commission, prev.commission)} accent />
-        <Kpi icon={CircleDollarSign} label="Prima emitida" value={money(k.premium)} delta={delta(k.premium, prev.premium)} />
+        <Kpi icon={BadgeDollarSign} label="Comisión del período" value={money(k.commission)} delta={delta(k.commission, prev.commission)} accent />
+        <Kpi icon={Wallet} label="Comisiones futuras" value={money(data.futureCommission)} hint={`Cuotas por vencer de ${num(data.futurePolicies)} ${data.futurePolicies === 1 ? "póliza" : "pólizas"}`} />
+        <Kpi icon={CircleDollarSign} label="Prima neta del período" value={money(k.premium)} delta={delta(k.premium, prev.premium)} />
         <Kpi icon={FileClock} label="Órdenes pendientes" value={num(data.pendingOrders)} hint="Por emitir (hoy)" href="/canal/cotizaciones" />
         <Kpi icon={CalendarClock} label="Próximos a vencer" value={num(data.expiring.length)} hint={expiryLabel} href="#vencimientos" tone={data.expiring.length ? "warn" : undefined} />
       </section>
 
       {/* Productos */}
       <section className="mt-4">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-bold"><Package className="size-4 text-brand-text" />Productos</h2>
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 className="flex items-center gap-2 text-sm font-bold"><Package className="size-4 text-brand-text" />Producción por producto</h2>
+          <p className="text-xs text-ink-subtle">Cuotas de tu cartera que vencen en el período seleccionado</p>
+        </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {data.products.map((p) => (
             <article key={p.id} className="glass-panel p-5">
@@ -64,14 +68,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
                   <p className="truncate text-sm font-bold">{p.name}</p>
                   <p className="text-xs text-ink-subtle">{p.insurer}</p>
                 </div>
-                <span className="shrink-0 rounded-full border border-line bg-surface-muted px-2.5 py-0.5 text-[11px] font-bold text-ink-muted">{totalVehicles ? Math.round((p.vehicles / totalVehicles) * 100) : 0} %</span>
+                <span className="shrink-0 rounded-full border border-line bg-surface-muted px-2.5 py-0.5 text-[11px] font-bold text-ink-muted">{totalNet ? Math.round((p.net / totalNet) * 100) : 0} %</span>
               </div>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-brand/10"><div className="h-full rounded-full bg-brand-text" style={{ width: `${totalVehicles ? (p.vehicles / totalVehicles) * 100 : 0}%` }} /></div>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-brand/10"><div className="h-full rounded-full bg-brand-text" style={{ width: `${totalNet ? (p.net / totalNet) * 100 : 0}%` }} /></div>
               <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
-                <Stat label="Vehículos" value={num(p.vehicles)} />
+                <Stat label="Vehículos" value={num(p.policies)} />
                 <Stat label="Clientes" value={num(p.clients)} />
-                <Stat label="Prima emitida" value={money(p.premium)} />
-                <Stat label="Comisión" value={money(p.commission)} />
+                <Stat label="Prima neta" value={money(p.net)} />
+                <Stat label="Prima total (inc. imp.)" value={money(p.total)} />
+                <div className="col-span-2 border-t border-line pt-3"><Stat label="Comisión" value={money(p.commission)} /></div>
               </dl>
             </article>
           ))}
@@ -84,8 +89,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
         <ChartCard title="Vehículos emitidos por mes" subtitle="Pólizas emitidas en el período">
           <ColumnChart ariaLabel="Vehículos emitidos por mes" empty="Sin pólizas emitidas en el período." data={data.monthly.map((m) => ({ label: monthLabel(m.month), sublabel: `Vehículos emitidos · ${monthLabel(m.month)}`, value: m.vehicles }))} />
         </ChartCard>
-        <ChartCard title="Comisión generada por mes" subtitle={`Total del período: ${money(k.commission)}`}>
-          <AreaChart ariaLabel="Comisión generada por mes" empty="Sin comisiones en el período." data={data.monthly.map((m) => ({ label: monthLabel(m.month), sublabel: `Comisión · ${monthLabel(m.month)}`, value: m.commission }))} />
+        <ChartCard title="Comisión por mes" subtitle={`Cuotas que vencen cada mes · total: ${money(k.commission)}`}>
+          <AreaChart ariaLabel="Comisión por mes" empty="Sin comisiones en el período." data={data.monthly.map((m) => ({ label: monthLabel(m.month), sublabel: `Comisión · ${monthLabel(m.month)}`, value: m.commission }))} />
         </ChartCard>
         <ChartCard title="Participación por producto" subtitle="Vehículos emitidos en el período">
           <BarList showShare empty="Sin pólizas emitidas en el período." data={data.products.filter((p) => p.vehicles).map((p) => ({ label: p.name, value: p.vehicles }))} />
