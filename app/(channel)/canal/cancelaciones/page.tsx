@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Cancelaciones del canal | Kuantix", 
 type Row = {
   id: string; cotizacion_id: string; numero_poliza: string; cliente: string; identificacion: string | null;
   marca: string | null; modelo: string | null; placa: string | null; producto: string;
-  fecha_emision: string; mes_cancelacion: string; cuota_desde: number; cuotas_canceladas: number; total_cuotas: number;
+  fecha_emision: string; mes_cancelacion: string; cuota_desde: number; cuotas_canceladas: number; total_cuotas: number; valor: string;
   motivo: string | null; origen: "INDIVIDUAL" | "EXCEL"; creado_en: string; usuario: string | null;
 };
 
@@ -30,6 +30,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
     `select cp.id, c.id as cotizacion_id, po.numero_poliza, cl.nombre_razon_social as cliente, cl.identificacion,
             v.marca, v.modelo, v.placa, p.nombre as producto, po.fecha_emision::text, cp.mes_cancelacion::text,
             cp.cuota_desde, cp.cuotas_canceladas, (select count(*)::int from tabla_cobranza t where t.poliza_id = po.id) as total_cuotas,
+            (select coalesce(sum(t.monto), 0)::text from tabla_cobranza t where t.poliza_id = po.id and t.numero_cuota >= cp.cuota_desde) as valor,
             cp.motivo, cp.origen, cp.creado_en::text, u.nombre as usuario
      from cancelacion_poliza cp
      join poliza po on po.id = cp.poliza_id
@@ -125,6 +126,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
                       <p className="text-sm font-semibold text-ink">{monthLabel(r.mes_cancelacion)}</p>
                       <p className="text-[11px] text-ink-subtle">Cuotas {r.cuota_desde}–{r.total_cuotas} ({r.cuotas_canceladas})</p>
                     </div>
+                    <div>
+                      <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-ink-subtle">Valor cancelación</p>
+                      <p className="text-sm font-bold text-red-700">{money(r.valor)}</p>
+                    </div>
                   </div>
                   <ActionTip label="Ver detalle">
                     <Link href={href} aria-label={`Ver detalle de ${r.cliente}`} className={`${iconActionClass} text-ink-subtle hover:border-brand/40 hover:bg-brand/10 hover:text-brand-text focus-visible:outline-brand`}>
@@ -144,6 +149,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
 function day(v: string) {
   const [y, m, d] = v.split("-");
   return `${d}/${m}/${y}`;
+}
+function money(v: string) {
+  return new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD" }).format(Number(v));
 }
 function monthLabel(v: string) {
   const [y, m] = v.split("-");

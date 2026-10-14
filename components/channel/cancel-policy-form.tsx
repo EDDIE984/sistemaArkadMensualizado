@@ -15,19 +15,29 @@ export function CancelPolicyForm({ policyId, issuedOn, installments }: { policyI
   const [error, setError] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
   const confirmRef = useRef<HTMLDialogElement>(null);
-  const minMonth = issuedOn.slice(0, 7);
+  // Solo se cancela desde cuotas por cobrar: si hay cuotas pagadas (incluso por adelantado), desde la siguiente a la última pagada.
+  const lastPaid = installments.filter((i) => i.status === "PAGADO").at(-1);
+  const firstAfterPaid = lastPaid ? installments.find((i) => i.number > lastPaid.number) : undefined;
+  const minMonth = [issuedOn.slice(0, 7), firstAfterPaid?.due.slice(0, 7) ?? ""].sort().at(-1)!;
+  const fullyPaid = Boolean(lastPaid && !firstAfterPaid);
   const maxMonth = installments.at(-1)?.due.slice(0, 7);
 
   const plan = useMemo(() => {
     if (!month) return null;
-    if (month < minMonth) return { error: "El mes de cancelación es anterior al mes de emisión de la póliza." } as const;
+    if (fullyPaid) return { error: "Todas las cuotas están pagadas; no hay cuotas por cancelar." } as const;
+    if (month < issuedOn.slice(0, 7)) return { error: "El mes de cancelación es anterior al mes de emisión de la póliza." } as const;
     const cancelled = installments.filter((i) => i.due >= `${month}-01`);
     if (!cancelled.length) return { error: "No hay cuotas desde ese mes: está fuera de la vigencia." } as const;
     const paid = cancelled.filter((i) => i.status === "PAGADO").map((i) => i.number);
     if (paid.length) return { error: `${paid.length === 1 ? "La cuota" : "Las cuotas"} ${paid.join(", ")} ya ${paid.length === 1 ? "está pagada" : "están pagadas"}; elige un mes posterior.` } as const;
-    return { from: cancelled[0].number, to: cancelled[cancelled.length - 1].number, count: cancelled.length } as const;
-  }, [month, minMonth, installments]);
+    const total = cancelled.reduce((sum, i) => sum + Math.round(Number(i.amount) * 100), 0) / 100;
+    return { from: cancelled[0].number, to: cancelled[cancelled.length - 1].number, count: cancelled.length, total } as const;
+  }, [month, issuedOn, fullyPaid, installments]);
   const ok = plan && !("error" in plan) ? plan : null;
+  const pending = useMemo(() => {
+    const open = installments.filter((i) => i.status === "PENDIENTE" || i.status === "VENCIDO");
+    return { count: open.length, total: open.reduce((sum, i) => sum + Math.round(Number(i.amount) * 100), 0) / 100 };
+  }, [installments]);
 
   const submit = () => {
     confirmRef.current?.close();
@@ -43,6 +53,19 @@ export function CancelPolicyForm({ policyId, issuedOn, installments }: { policyI
     <div className="mt-4 grid gap-4">
       <section className={card}>
         <h2 className="flex items-center gap-2 text-sm font-bold"><CalendarX2 className="size-4 text-brand-text" />Mes de cancelación</h2>
+        {lastPaid && !fullyPaid && <p className="mt-1 text-xs text-ink-muted">La cuota {lastPaid.number} ya está pagada: solo se puede cancelar desde {monthLabel(minMonth)} (cuota {firstAfterPaid!.number}).</p>}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-line bg-surface-muted px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-ink-subtle">Total pendiente</p>
+            <p className="mt-1 text-xl font-bold text-ink">{money(pending.total)}</p>
+            <p className="text-[11px] text-ink-subtle">{pending.count} {pending.count === 1 ? "cuota pendiente" : "cuotas pendientes"}</p>
+          </div>
+          <div className={`rounded-2xl border px-4 py-3 ${ok ? "border-red-200 bg-red-50" : "border-dashed border-line"}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-[0.12em] ${ok ? "text-red-700" : "text-ink-subtle"}`}>Total a cancelar</p>
+            <p className={`mt-1 text-xl font-bold ${ok ? "text-red-700" : "text-ink-subtle"}`}>{ok ? money(ok.total) : "—"}</p>
+            <p className="text-[11px] text-ink-subtle">{ok ? `${ok.count} ${ok.count === 1 ? "cuota" : "cuotas"} (de la ${ok.from} a la ${ok.to})` : "Elige el mes de cancelación"}</p>
+          </div>
+        </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-[220px_minmax(0,1fr)]">
           <label className="grid gap-1.5">
             <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-ink-subtle">Cancelar desde</span>
@@ -57,7 +80,7 @@ export function CancelPolicyForm({ policyId, issuedOn, installments }: { policyI
         {ok && (
           <p className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <span>Se cancelarán <strong>{ok.count} {ok.count === 1 ? "cuota" : "cuotas"}</strong>: de la cuota <strong>{ok.from}</strong> a la <strong>{ok.to}</strong>. La póliza quedará cancelada desde <strong>{monthLabel(month)}</strong>.</span>
+            <span>Se cancelarán <strong>{ok.count} {ok.count === 1 ? "cuota" : "cuotas"}</strong>: de la cuota <strong>{ok.from}</strong> a la <strong>{ok.to}</strong>. Valor total de la cancelación: <strong>{money(ok.total)}</strong>. La póliza quedará cancelada desde <strong>{monthLabel(month)}</strong>.</span>
           </p>
         )}
         {error && <p role="alert" className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"><AlertCircle className="mt-0.5 size-4 shrink-0" />{error}</p>}
@@ -89,6 +112,20 @@ export function CancelPolicyForm({ policyId, issuedOn, installments }: { policyI
                 );
               })}
             </tbody>
+            <tfoot className="border-t border-line">
+              <tr className="bg-surface-muted">
+                <td colSpan={2} className="px-3 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-ink-subtle">Total pendiente ({pending.count} {pending.count === 1 ? "cuota" : "cuotas"})</td>
+                <td className="px-3 py-3 text-right text-sm font-bold text-ink">{money(pending.total)}</td>
+                <td />
+              </tr>
+              {ok && (
+                <tr className="border-t border-line bg-red-50/60">
+                  <td colSpan={2} className="px-3 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-red-700">Total a cancelar ({ok.count} {ok.count === 1 ? "cuota" : "cuotas"})</td>
+                  <td className="px-3 py-3 text-right text-sm font-bold text-red-700">{money(ok.total)}</td>
+                  <td />
+                </tr>
+              )}
+            </tfoot>
           </table>
         </div>
       </section>
@@ -97,7 +134,7 @@ export function CancelPolicyForm({ policyId, issuedOn, installments }: { policyI
         <div className="p-6 sm:p-7">
           <span className="flex size-12 items-center justify-center rounded-2xl bg-red-50 text-red-600"><Ban className="size-6" /></span>
           <h2 id="cancel-confirm-title" className="mt-5 text-xl font-bold tracking-[-0.02em]">¿Cancelar la póliza?</h2>
-          {ok && <p className="mt-3 text-sm leading-6 text-ink-muted">Se cancelarán las cuotas <strong className="text-ink">{ok.from} a {ok.to}</strong> desde <strong className="text-ink">{monthLabel(month)}</strong>. Esta acción no se puede deshacer.</p>}
+          {ok && <p className="mt-3 text-sm leading-6 text-ink-muted">Se cancelarán las cuotas <strong className="text-ink">{ok.from} a {ok.to}</strong> desde <strong className="text-ink">{monthLabel(month)}</strong>, por un valor total de <strong className="text-ink">{money(ok.total)}</strong>. Esta acción no se puede deshacer.</p>}
           <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <button type="button" onClick={() => confirmRef.current?.close()} className="inline-flex min-h-11 items-center justify-center rounded-full border border-line px-5 text-sm font-bold hover:bg-surface-muted">Volver</button>
             <button type="button" onClick={submit} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-red-600 px-5 text-sm font-bold text-white hover:bg-red-700"><Ban className="size-4" />Sí, cancelar</button>
@@ -125,7 +162,7 @@ function day(v: string) {
   const [y, m, d] = v.split("-");
   return `${d}/${m}/${y}`;
 }
-function money(v: string) {
+function money(v: string | number) {
   return new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD" }).format(Number(v));
 }
 function monthLabel(v: string) {

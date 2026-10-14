@@ -1215,13 +1215,49 @@ cálculo sin tasa.
 
 ---
 
+### Registro de pagos por canal
+
+El menú **Pagos** de `USUARIO_CANAL` permite consultar cuotas de pólizas emitidas
+de su canal y aseguradora. Filtra por rango inclusivo de `fecha_vencimiento`,
+uno o varios productos y estado. El mes afectado es el mes de vencimiento de
+la cuota, independiente de la fecha en que se registra el pago.
+
+- Cada fila corresponde a una `TABLA_COBRANZA`. Se puede seleccionar una,
+  varias o todas las cuotas por cobrar del filtro, incluyendo otras páginas.
+- Se paga el saldo completo: `monto - SUM(PAGO.monto_pagado WHERE estado =
+  'REGISTRADO')`. Los pagos anulados no reducen el saldo. No se capturan abonos
+  parciales en este proceso; se respetan los abonos registrados previamente.
+- **Orden obligatorio:** las cuotas de una póliza se pagan en orden. Una cuota
+  solo se paga si todas sus cuotas anteriores por cobrar están pagadas o van en
+  el mismo lote. Las cuotas cuya póliza tiene una cuota anterior por cobrar fuera
+  del filtro no son seleccionables. Quitar una cuota de la selección quita
+  también las siguientes de esa póliza; con "todas las del filtro" se puede
+  desmarcar sin afectar el resto de la selección.
+- **Pago por adelantado:** se permite pagar cuotas que aún no vencen. Una póliza
+  con cuotas pagadas solo puede cancelarse desde la cuota siguiente a la última
+  pagada (la cancelación nunca afecta cuotas `PAGADO`).
+- La fecha de pago no puede ser futura ni anterior a `POLIZA.fecha_emision`.
+- Cada cuota seleccionada genera un `PAGO` con fecha real del pago (no futura),
+  método, referencia opcional y usuario autenticado; queda `PAGADO`. Las cuotas
+  pagadas o canceladas no son seleccionables. Cuotas anteriores no canceladas
+  de una póliza cancelada sí pueden cobrarse.
+- El servidor valida pertenencia, saldo y estados nuevamente. Si el número
+  de cuotas o total cambió respecto a la confirmación, rechaza el lote completo
+  y solicita actualizar la consulta. Límite por operación: 10.000 cuotas.
+- El lote se registra en una transacción con bloqueo ordenado de pólizas y
+  cuotas, compartiendo el bloqueo de póliza con cancelaciones. No hay éxitos
+  parciales ni duplicados por reenvíos concurrentes. Se auditan tanto el pago
+  como el cambio de estado de cada cuota.
+- El estado vencido de consulta incluye cuotas pendientes cuya fecha de
+  vencimiento es anterior a hoy en `America/Guayaquil`.
+
 ## 6. Roles y permisos (resumen para el backend)
 
 | Perfil | Puede |
 |---|---|
 | `ADMIN_PLATAFORMA` | Crear/editar aseguradoras, crear `ADMIN_ASEGURADORA`, ver todo el sistema |
 | `ADMIN_ASEGURADORA` | Configurar productos, canales, coberturas, cláusulas, tarifas/riesgos de **su** aseguradora; crear `USUARIO_CANAL` propios; ver cotizaciones/pólizas/cobranzas de su aseguradora |
-| `USUARIO_CANAL` | Cotizar y gestionar clientes dentro de su canal/aseguradora asignada; corregir sus Órdenes de Emisión pendientes y regenerar/enviar su certificado; cancelar pólizas vigentes de su canal (individual o Excel) |
+| `USUARIO_CANAL` | Cotizar y gestionar clientes dentro de su canal/aseguradora asignada; corregir sus Órdenes de Emisión pendientes y regenerar/enviar su certificado; cancelar pólizas vigentes de su canal (individual o Excel); consultar y registrar pagos completos de cuotas de su canal desde Pagos |
 | `CLIENTE` | Registrarse, cotizar (autogestión), ver sus propias cotizaciones/pólizas/cobranzas, aceptar/rechazar cotizaciones |
 
 ### 6.1 Alcance del panel `ADMIN_PLATAFORMA`

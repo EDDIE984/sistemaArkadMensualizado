@@ -31,6 +31,7 @@ export function BulkCancellationUpload() {
 
   const reset = () => { setRows([]); setNotice(null); setTerm(""); if (fileRef.current) fileRef.current.value = ""; };
   const withErrors = rows.filter((r) => r.errors.length).length;
+  const total = rows.reduce((sum, r) => sum + Math.round(Number(r.preview?.total ?? 0) * 100), 0) / 100;
   const filtered = useMemo(() => {
     const q = term.trim().toLowerCase();
     if (!q) return rows;
@@ -85,6 +86,7 @@ export function BulkCancellationUpload() {
               <span className="rounded-full border border-line bg-surface-muted px-3 py-1 text-ink-muted">{rows.length} filas</span>
               <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">{rows.length - withErrors} listas</span>
               {withErrors > 0 && <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-red-700">{withErrors} con errores</span>}
+              {total > 0 && <span className="rounded-full border border-line bg-white px-3 py-1 text-ink">Total {money(total)}</span>}
             </div>
           </div>
 
@@ -111,6 +113,7 @@ export function BulkCancellationUpload() {
                   <th className="px-3 py-2.5">Producto</th>
                   <th className="px-3 py-2.5">Póliza</th>
                   <th className="px-3 py-2.5">Cancela desde</th>
+                  <th className="px-3 py-2.5 text-right">Valor</th>
                   <th className="px-3 py-2.5">Estado</th>
                   <th className="px-3 py-2.5"><span className="sr-only">Acciones</span></th>
                 </tr>
@@ -126,6 +129,7 @@ export function BulkCancellationUpload() {
                     <td className="px-3 py-3 text-ink-muted">
                       {r.preview ? <>{monthLabel(r.preview.month)}<span className="block text-ink-subtle">Cuotas {r.preview.from}–{r.preview.to} ({r.preview.count})</span></> : r.data.month || "—"}
                     </td>
+                    <td className="px-3 py-3 text-right font-semibold text-ink">{r.preview ? money(r.preview.total) : "—"}</td>
                     <td className="px-3 py-3">
                       {r.errors.length ? (
                         <ul className="grid gap-0.5 text-red-700">{r.errors.map((e) => <li key={e} className="flex gap-1.5"><AlertCircle className="mt-0.5 size-3.5 shrink-0" />{e}</li>)}</ul>
@@ -142,8 +146,17 @@ export function BulkCancellationUpload() {
                     </td>
                   </tr>
                 ))}
-                {!filtered.length && <tr><td colSpan={8} className="px-3 py-8 text-center text-sm text-ink-subtle">No hay filas que coincidan con &quot;{term}&quot;.</td></tr>}
+                {!filtered.length && <tr><td colSpan={9} className="px-3 py-8 text-center text-sm text-ink-subtle">No hay filas que coincidan con &quot;{term}&quot;.</td></tr>}
               </tbody>
+              {total > 0 && (
+                <tfoot className="border-t border-line bg-red-50/60">
+                  <tr>
+                    <td colSpan={6} className="px-3 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-red-700">Total cancelación{withErrors > 0 ? " (filas válidas)" : ""}</td>
+                    <td className="px-3 py-3 text-right text-sm font-bold text-red-700">{money(total)}</td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
 
@@ -175,6 +188,7 @@ export function BulkCancellationUpload() {
           <h2 id="bulk-cancel-title" className="mt-5 text-xl font-bold tracking-[-0.02em]">¿Cancelar {rows.length} {rows.length === 1 ? "póliza" : "pólizas"}?</h2>
           <ul className="mt-3 grid gap-2 text-sm leading-6 text-ink-muted">
             <li>• Las cuotas desde el mes indicado en cada fila quedarán <strong className="text-ink">canceladas</strong>.</li>
+            <li>• Valor total de la cancelación: <strong className="text-ink">{money(total)}</strong>.</li>
             <li>• Si alguna póliza falla, <strong className="text-ink">no se cancela ninguna</strong>.</li>
             <li>• Esta acción no se puede deshacer.</li>
           </ul>
@@ -191,4 +205,7 @@ export function BulkCancellationUpload() {
 function monthLabel(v: string) {
   const [y, m] = v.split("-");
   return `${m}/${y}`;
+}
+function money(v: string | number) {
+  return new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD" }).format(Number(v));
 }

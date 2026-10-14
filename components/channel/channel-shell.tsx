@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Ban, ChartNoAxesCombined, ChevronLeft, ChevronRight, Files, LogOut, UserRound, Users } from "lucide-react";
+import { Ban, Calculator, ChartNoAxesCombined, ChevronLeft, ChevronRight, CreditCard, Files, LogOut, UserRound, Users } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { MobileNavigationMenu } from "@/components/internal/mobile-navigation-menu";
 import { KuantixLogo, KuantixMark } from "@/components/brand/kuantix-logo";
@@ -12,7 +12,9 @@ const items = [
   { href: "/canal", label: "Resumen", icon: ChartNoAxesCombined },
   { href: "/canal/cotizaciones", label: "Órdenes de Emisión", icon: Files },
   { href: "/canal/clientes", label: "Clientes", icon: Users },
+  { href: "/canal/pagos", label: "Pagos", icon: CreditCard },
   { href: "/canal/cancelaciones", label: "Cancelaciones", icon: Ban },
+  { href: "/canal/tradicional", label: "Tradicional", icon: Calculator },
   { href: "/canal/perfil", label: "Mi perfil", icon: UserRound },
 ];
 

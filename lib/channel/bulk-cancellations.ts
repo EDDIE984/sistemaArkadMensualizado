@@ -20,7 +20,7 @@ export type CancellationRowResult = {
   row: number;
   data: CancellationRowData;
   errors: string[];
-  preview?: { policyNumber: string; client: string; from: number; to: number; count: number; month: string };
+  preview?: { policyNumber: string; client: string; from: number; to: number; count: number; month: string; total: string };
 };
 
 export const CANCELLATION_COLUMNS: { key: keyof CancellationRowData; header: string; required: boolean; width: number; note: string }[] = [
@@ -181,7 +181,7 @@ export async function validateCancellationRows(rows: CancellationRowResult[], sc
         try {
           const p = await previewPolicyCancellation(scope.channelId, { policyId: active[0].id, month });
           policyOf.set(r.row, p.policyId);
-          preview = { policyNumber: p.policyNumber, client: p.client, from: p.from, to: p.to, count: p.count, month: p.month };
+          preview = { policyNumber: p.policyNumber, client: p.client, from: p.from, to: p.to, count: p.count, month: p.month, total: p.total };
         } catch (error) {
           if (!(error instanceof CancellationError)) throw error;
           errors.push(error.message);

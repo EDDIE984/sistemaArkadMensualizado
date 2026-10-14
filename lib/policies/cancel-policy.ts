@@ -26,6 +26,7 @@ export type CancellationPreview = {
   to: number;
   count: number;
   firstDue: string;
+  total: string; // suma del monto de las cuotas canceladas
 };
 
 /** Valor interno: nunca se envía al navegador. */
@@ -71,8 +72,8 @@ async function resolveCancellation(conn: Queryable, channelId: string, input: { 
   if (po.estado !== "VIGENTE") throw new CancellationError(`La póliza ${po.numero_poliza} está ${po.estado.toLowerCase()}; solo se cancelan pólizas vigentes.`);
   if (month < `${po.fecha_emision.slice(0, 7)}-01`) throw new CancellationError("El mes de cancelación es anterior al mes de emisión de la póliza.");
 
-  const installments = await conn.query<{ numero_cuota: number; fecha_vencimiento: string; estado: string }>(
-    `select numero_cuota, fecha_vencimiento::text, estado from tabla_cobranza where poliza_id = $1 order by numero_cuota`,
+  const installments = await conn.query<{ numero_cuota: number; fecha_vencimiento: string; monto: string; estado: string }>(
+    `select numero_cuota, fecha_vencimiento::text, monto::text, estado from tabla_cobranza where poliza_id = $1 order by numero_cuota`,
     [po.id],
   );
   const cancelled = installments.rows.filter((r) => r.fecha_vencimiento >= month);
@@ -103,6 +104,7 @@ async function resolveCancellation(conn: Queryable, channelId: string, input: { 
     to,
     count: cancelled.length,
     firstDue: cancelled[0].fecha_vencimiento,
+    total: (cancelled.reduce((sum, r) => sum + Math.round(Number(r.monto) * 100), 0) / 100).toFixed(2),
     quoteId: po.cotizacion_id,
     leveling: leveling.rows[0].valor,
   };
