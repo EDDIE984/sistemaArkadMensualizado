@@ -20,6 +20,7 @@ export function RangePicker({
   range,
   preserve,
   anchor = "",
+  basePath = "/canal",
 }: {
   label: string;
   options: readonly Option[];
@@ -31,12 +32,19 @@ export function RangePicker({
   /** Rango efectivo actual (se usa de partida al personalizar). */
   range: { from: string; to: string };
   /** Otros filtros de la URL que se conservan. */
-  preserve: Record<string, string>;
+  preserve: Record<string, string | string[]>;
   anchor?: string;
+  /** Ruta que recibe los filtros; el canal conserva /canal por defecto. */
+  basePath?: string;
 }) {
   const [custom, setCustom] = useState(activeKey === "rango");
   const selected = custom ? "rango" : activeKey;
-  const hrefFor = (key: string) => `/canal?${new URLSearchParams({ ...preserve, [param]: key }).toString()}${anchor}`;
+  const queryFor = (next: Record<string, string | string[]>) => {
+    const query = new URLSearchParams();
+    Object.entries(next).forEach(([key, value]) => (Array.isArray(value) ? value : [value]).forEach((item) => query.append(key, item)));
+    return query.toString();
+  };
+  const hrefFor = (key: string) => `${basePath}?${queryFor({ ...preserve, [param]: key })}${anchor}`;
 
   return (
     <div className="grid gap-3">
@@ -60,8 +68,8 @@ export function RangePicker({
       </div>
 
       {custom && (
-        <form action={`/canal${anchor}`} className="flex flex-wrap items-end gap-2 rounded-2xl border border-brand/30 bg-brand/5 p-3">
-          {Object.entries(preserve).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
+        <form action={`${basePath}${anchor}`} className="flex flex-wrap items-end gap-2 rounded-2xl border border-brand/30 bg-brand/5 p-3">
+          {Object.entries(preserve).flatMap(([key, value]) => (Array.isArray(value) ? value : [value]).map((item, index) => <input key={`${key}-${index}-${item}`} type="hidden" name={key} value={item} />))}
           <input type="hidden" name={param} value="rango" />
           <DateInput name={fromParam} label="Desde" value={range.from} />
           <DateInput name={toParam} label="Hasta" value={range.to} />

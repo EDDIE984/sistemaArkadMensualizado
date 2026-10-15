@@ -13,17 +13,32 @@ import type { QuoteActionState } from "@/lib/quotes/types";
 
 const optionalUuid = z.string().uuid().optional().or(z.literal(""));
 
+const channelSchema = z.object({
+  id: optionalUuid,
+  name: z.string().trim().min(2, "El nombre debe tener al menos 2 caracteres.").max(100),
+  description: z.string().trim().max(300),
+  ruc: z.string().trim().regex(/^(\d{10}001)?$/, "El RUC debe tener 13 dígitos y terminar en 001."),
+  address: z.string().trim().max(300, "La dirección admite hasta 300 caracteres."),
+  phone: z.string().trim().regex(/^(\+?[\d\s-]{7,20})?$/, "El teléfono solo admite números, espacios, guiones y +."),
+  contact: z.string().trim().max(120, "La persona de contacto admite hasta 120 caracteres."),
+});
+
 export async function saveChannel(_: InsurerActionState, formData: FormData): Promise<InsurerActionState> {
   const session = await requireInsurerAdmin();
-  const parsed = z.object({ id: optionalUuid, name: z.string().trim().min(2).max(100), description: z.string().trim().max(300).optional() }).safeParse({ id: formData.get("id") || "", name: formData.get("name"), description: formData.get("description") || "" });
-  if (!parsed.success) return invalid(parsed.error.flatten().fieldErrors);
-  const values = { aseguradora_id: session.insurerId!, nombre: parsed.data.name, descripcion: parsed.data.description || null };
+  const text = (key: string) => String(formData.get(key) ?? "");
+  const parsed = channelSchema.safeParse({ id: formData.get("id") || "", name: text("name"), description: text("description"), ruc: text("ruc"), address: text("address"), phone: text("phone"), contact: text("contact") });
+  if (!parsed.success) return failure(parsed.error.issues[0]?.message ?? "Revisa los datos del canal.");
+  const { id, name, description, ruc, address, phone, contact } = parsed.data;
+  const values = { aseguradora_id: session.insurerId!, nombre: name, descripcion: description || null, ruc: ruc || null, direccion: address || null, telefono: phone || null, contacto_nombre: contact || null };
   const db = createAdminClient();
-  const result = parsed.data.id
-    ? await db.from("canal").update(values).eq("id", parsed.data.id).eq("aseguradora_id", session.insurerId!)
-    : await db.from("canal").insert(values);
+  const result = id
+    ? await db.from("canal").update(values).eq("id", id).eq("aseguradora_id", session.insurerId!).select("id").maybeSingle()
+    : await db.from("canal").insert(values).select("id").single();
   if (result.error) return failure(result.error.code === "23505" ? "Ya existe un canal con ese nombre." : "No pudimos guardar el canal.");
-  revalidatePath("/aseguradora/canales"); return success("Canal guardado correctamente.");
+  revalidatePath("/aseguradora/canales");
+  // Canal nuevo: pasa directo a crear su producto con el canal ya elegido.
+  if (!id && result.data) redirect(`/aseguradora/productos?nuevoCanal=${result.data.id}#nuevo-producto`);
+  return success("Canal guardado correctamente.");
 }
 
 export async function toggleChannel(formData: FormData) {
@@ -44,10 +59,13 @@ export async function saveProduct(_: InsurerActionState, formData: FormData): Pr
   if (!channel || !branch) return failure("El canal o ramo no pertenece a tu aseguradora o está inactivo.");
   const values = { aseguradora_id: session.insurerId!, canal_id: channel.id, aseguradora_ramo_id: branch.id, nombre: parsed.data.name, aplica_todas_ciudades: parsed.data.allCities, comision_canal_pct: parsed.data.commission };
   const result = parsed.data.id
-    ? await db.from("producto").update(values).eq("id", parsed.data.id).eq("aseguradora_id", session.insurerId!)
-    : await db.from("producto").insert(values);
+    ? await db.from("producto").update(values).eq("id", parsed.data.id).eq("aseguradora_id", session.insurerId!).select("id").maybeSingle()
+    : await db.from("producto").insert(values).select("id").single();
   if (result.error) return failure("No pudimos guardar el producto.");
-  revalidatePath("/aseguradora/productos"); return success("Producto guardado correctamente.");
+  revalidatePath("/aseguradora/productos");
+  // Producto nuevo: entra directo a su configuración.
+  if (!parsed.data.id && result.data) redirect(`/aseguradora/productos/${result.data.id}`);
+  return success("Producto guardado correctamente.");
 }
 
 export async function toggleProduct(formData: FormData) {

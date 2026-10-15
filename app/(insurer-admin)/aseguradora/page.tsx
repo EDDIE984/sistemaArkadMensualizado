@@ -1,250 +1,102 @@
 import type { Metadata } from "next";
-import { BadgePercent, FileCheck2, FileText, HandCoins, Percent } from "lucide-react";
+import { BadgeDollarSign, BadgePercent, CalendarClock, CircleDollarSign, Download, FileClock, Landmark, Package, ReceiptText, Users, Wallet } from "lucide-react";
 import { AdminPage } from "@/components/admin/admin-ui";
-import { ComparisonChart, StatusChart } from "@/components/insurer/dashboard-charts";
-import { DashboardFilters, MONTHS } from "@/components/insurer/dashboard-filters";
+import { AreaChart, BarList, ColumnChart } from "@/components/channel/summary-charts";
+import { RangePicker } from "@/components/channel/range-picker";
+import { SummaryScopeFilter } from "@/components/insurer/summary-scope-filter";
+import { ChartCard, ExpiringTable, Kpi, Stat, day, delta, money, num } from "@/components/summary/summary-ui";
 import { requireInsurerAdmin } from "@/lib/auth/session";
+import { monthLabel } from "@/lib/channel/month-label";
+import { EXPIRY_OPTIONS, PERIOD_OPTIONS, getSummary, parseSummaryFilters } from "@/lib/channel/summary";
+import { getCollections, type CollectionChannel } from "@/lib/insurer/collections";
+import { resolveInsurerSummaryScope } from "@/lib/insurer/summary-scope";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getDbPool } from "@/lib/db/pool";
 
-export const metadata: Metadata = { title: "Administración de aseguradora | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Resumen de la aseguradora | Kuantix", robots: { index: false, follow: false } };
 
-type KpiRow = {
-  quotes: string; accepted: string; policies: string;
-  commission_projected: string; commission_monthly: string;
-};
-type SeriesRow = { label: string; quotes?: string; policies?: string };
-type StatusRow = { label: string; value: string };
+type SearchParams = { periodo?: string | string[]; desde?: string | string[]; hasta?: string | string[]; vence?: string | string[]; vdesde?: string | string[]; vhasta?: string | string[]; canal?: string | string[]; productos?: string | string[] };
+const first = (value: string | string[] | undefined) => typeof value === "string" ? value : undefined;
+const selectedQuery = (channelId: string | null, productIds: string[]) => ({ ...(channelId ? { canal: channelId } : {}), ...(productIds.length ? { productos: productIds } : {}) });
 
-// Ecuador (UTC-5, sin horario de verano). Producción se ancla a la cotización
-// y las comisiones a pólizas emitidas.
-const TZ = "America/Guayaquil";
-
-export default async function Dashboard({ searchParams }: { searchParams: Promise<{ canal?: string; desde?: string; hasta?: string; comisionAnio?: string; comisionMes?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const session = await requireInsurerAdmin();
-  const insurerId = session.insurerId!;
-  const db = createAdminClient();
-  const pool = getDbPool();
-
-  const { data: canales = [] } = await db
-    .from("canal").select("id,nombre").eq("aseguradora_id", insurerId).eq("activo", true).order("nombre");
-
-  const sp = await searchParams;
-  const canalId = (canales ?? []).some((c) => c.id === sp.canal) ? sp.canal! : null;
-  const currentYear = Number(new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric" }).format(new Date()));
-  const currentMonth = Number(new Intl.DateTimeFormat("en-CA", { timeZone: TZ, month: "numeric" }).format(new Date()));
-  const yearOptions = Array.from({ length: 11 }, (_, index) => currentYear + 5 - index);
-  const rawFrom = yearOptions.includes(Number(sp.desde)) ? Number(sp.desde) : currentYear;
-  const rawTo = yearOptions.includes(Number(sp.hasta)) ? Number(sp.hasta) : currentYear;
-  const fromYear = Math.min(rawFrom, rawTo);
-  const toYear = Math.max(rawFrom, rawTo);
-  const commissionYear = yearOptions.includes(Number(sp.comisionAnio)) ? Number(sp.comisionAnio) : currentYear;
-  const commissionMonth = /^([1-9]|1[0-2])$/.test(sp.comisionMes ?? "") ? Number(sp.comisionMes) : currentMonth;
-
-  const yearParams = [insurerId, canalId, fromYear, toYear];
-  const periodParams = [...yearParams, commissionYear, commissionMonth];
-
-  const [insurer, kpis, statuses, commercialTrend, byChannel] = await Promise.all([
-    db.from("aseguradora").select("nombre_comercial").eq("id", insurerId).single(),
-    pool.query<KpiRow>(`
-      with base as (
-        select c.id, c.estado
-        from cotizacion c
-        where c.aseguradora_id = $1
-          and ($2::uuid is null or c.canal_id = $2)
-          and extract(year from c.creado_en at time zone '${TZ}') between $3 and $4
-      ),
-      projected_comm as (
-        select coalesce(sum(am.comision_canal), 0) projected
-        from poliza p
-        join cotizacion c on c.id = p.cotizacion_id
-        join amortizacion_mensual am on am.cotizacion_id = c.id
-        where c.aseguradora_id = $1
-          and ($2::uuid is null or c.canal_id = $2)
-          and (p.fecha_inicio_vigencia + make_interval(months => am.mes)) >= make_date($3::int, 1, 1)
-          and (p.fecha_inicio_vigencia + make_interval(months => am.mes)) < make_date(($4::int + 1), 1, 1)
-      ),
-      monthly_comm as (
-        select coalesce(sum(am.comision_canal), 0) monthly
-        from poliza p
-        join cotizacion c on c.id = p.cotizacion_id
-        join amortizacion_mensual am on am.cotizacion_id = c.id
-        where c.aseguradora_id = $1
-          and ($2::uuid is null or c.canal_id = $2)
-          and date_trunc('month', p.fecha_inicio_vigencia + make_interval(months => am.mes)) = make_date($5::int, $6::int, 1)
-      ),
-      pol as (
-        select count(*) n
-        from poliza p join cotizacion c on c.id = p.cotizacion_id
-        where c.aseguradora_id = $1
-          and ($2::uuid is null or c.canal_id = $2)
-          and extract(year from p.fecha_emision) between $3 and $4
-      )
-      select (select count(*) from base)::text quotes,
-             (select count(*) from base where estado = 'ACEPTADA')::text accepted,
-             (select n from pol)::text policies,
-             (select projected from projected_comm)::text commission_projected,
-             (select monthly from monthly_comm)::text commission_monthly
-    `, periodParams),
-    pool.query<StatusRow>(`
-      select c.estado label, count(*)::text value
-      from cotizacion c
-      where c.aseguradora_id = $1
-        and ($2::uuid is null or c.canal_id = $2)
-        and extract(year from c.creado_en at time zone '${TZ}') between $3 and $4
-      group by c.estado order by count(*) desc
-    `, yearParams),
-    pool.query<SeriesRow>(`
-      with years as (select generate_series(make_date($3::int,1,1)::timestamp, make_date($4::int,1,1)::timestamp, interval '1 year') y),
-      q as (
-        select date_trunc('year', creado_en at time zone '${TZ}') y, count(*) n
-        from cotizacion
-        where aseguradora_id = $1 and ($2::uuid is null or canal_id = $2)
-          and extract(year from creado_en at time zone '${TZ}') between $3 and $4
-        group by 1
-      ),
-      p as (
-        select date_trunc('year', po.fecha_emision)::timestamp y, count(*) n
-        from poliza po join cotizacion c on c.id = po.cotizacion_id
-        where c.aseguradora_id = $1 and ($2::uuid is null or c.canal_id = $2)
-          and extract(year from po.fecha_emision) between $3 and $4
-        group by 1
-      )
-      select to_char(years.y,'YYYY') label, coalesce(q.n,0)::text quotes, coalesce(p.n,0)::text policies
-      from years left join q using(y) left join p using(y)
-      order by years.y
-    `, yearParams),
-    canalId
-      ? Promise.resolve({ rows: [] as StatusRow[] })
-      : pool.query<StatusRow>(`
-          select coalesce(ch.nombre, 'Autogestión') label, coalesce(sum(am.comision_canal), 0)::text value
-          from poliza p
-          join cotizacion c on c.id = p.cotizacion_id
-          join amortizacion_mensual am on am.cotizacion_id = c.id
-          left join canal ch on ch.id = c.canal_id
-          where c.aseguradora_id = $1
-            and extract(year from p.fecha_emision) between $2 and $3
-          group by 1 order by 2 desc
-        `, [insurerId, fromYear, toYear]),
+  const params = await searchParams;
+  const filters = parseSummaryFilters({ periodo: first(params.periodo), desde: first(params.desde), hasta: first(params.hasta), vence: first(params.vence), vdesde: first(params.vdesde), vhasta: first(params.vhasta) });
+  const scopeData = await resolveInsurerSummaryScope(session.insurerId!, { canal: params.canal, productos: params.productos });
+  const [insurerResult, summary, collections] = await Promise.all([
+    createAdminClient().from("aseguradora").select("nombre_comercial").eq("id", session.insurerId!).single(),
+    getSummary(scopeData.scope, filters.period, filters.expiry),
+    getCollections(scopeData.scope, filters.period),
   ]);
+  const { current, previous } = summary;
+  const scopeQuery = selectedQuery(scopeData.selectedChannelId, scopeData.selectedProductIds);
+  const query = new URLSearchParams({ ...filters.periodQs, ...filters.expiryQs, ...(scopeData.selectedChannelId ? { canal: scopeData.selectedChannelId } : {}) });
+  scopeData.selectedProductIds.forEach((productId) => query.append("productos", productId));
+  const download = `/aseguradora/resumen/descargar?${query.toString()}`;
+  const expiryLabel = filters.expiryKey === "rango" ? `${day(filters.expiry.from)} – ${day(filters.expiry.to)}` : `Próximos ${filters.expiryKey} días`;
+  const totalNet = summary.products.reduce((total, product) => total + product.net, 0);
+  const isAllChannels = scopeData.selectedChannelId === null;
 
-  const k = kpis.rows[0] || { quotes: "0", accepted: "0", policies: "0", commission_projected: "0", commission_monthly: "0" };
-  const quoteCount = Number(k.quotes);
-  const policyCount = Number(k.policies);
-  const commissionProjected = Number(k.commission_projected);
-  const commissionMonthly = Number(k.commission_monthly);
-
-  const commercial = commercialTrend.rows.map((x) => ({ label: monthLabel(x.label), primary: Number(x.quotes ?? 0), secondary: Number(x.policies ?? 0) }));
-
-  const canalName = canalId ? (canales ?? []).find((c) => c.id === canalId)?.nombre ?? null : null;
-  const periodLabel = `${fromYear}${fromYear === toYear ? "" : `–${toYear}`}${canalName ? ` · ${canalName}` : ""}`;
-
-  return (
-    <AdminPage
-      eyebrow="Indicadores ejecutivos"
-      title={insurer.data?.nombre_comercial || "Mi aseguradora"}
-      description="Monitorea producción, conversión y comisiones del canal de tu operación."
-    >
-      <p className="mt-3 text-xs text-ink-subtle">Los indicadores se obtienen de cotizaciones y pólizas registradas en la base de datos.</p>
-
-      <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <Metric icon={<FileText />} label="Cotizaciones" value={quoteCount.toLocaleString("es-EC")} detail={`${Number(k.accepted)} aceptadas`} />
-        <Metric icon={<FileCheck2 />} label="Pólizas emitidas" value={policyCount.toLocaleString("es-EC")} detail="De cotizaciones del período" />
-        <Metric icon={<Percent />} label="Conversión" value={percentage(policyCount, quoteCount)} detail="Pólizas / cotizaciones" />
-      </section>
-
-      <section className="mt-4 grid gap-4">
-        <div className="glass-panel grid content-start gap-3 p-5 sm:p-6">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-text/80">Comisiones del canal</p>
-            <h2 className="mt-2 text-lg font-bold">Comisión proyectada</h2>
-            <p className="mt-1 text-xs text-ink-subtle">Cuotas proyectadas con vencimiento entre {periodLabel}</p>
-          </div>
-          <DashboardFilters canales={canales ?? []} years={yearOptions} selected={{ canal: canalId, desde: fromYear, hasta: toYear }} />
-          <CommissionTile icon={<HandCoins />} label="Proyección total" value={money(commissionProjected)} detail="Comisión de las cuotas proyectadas dentro del período" />
-        </div>
-        <div className="glass-panel grid content-start gap-4 p-5 sm:p-6">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-text/80">Consulta independiente</p>
-            <h2 className="mt-2 text-lg font-bold">Comisión mensualizada</h2>
-          </div>
-          <form className="flex flex-wrap items-end gap-2" aria-label="Consultar comisión mensualizada">
-            {canalId && <input type="hidden" name="canal" value={canalId} />}
-            <input type="hidden" name="desde" value={fromYear} />
-            <input type="hidden" name="hasta" value={toYear} />
-            <label className="grid gap-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Año</span><select name="comisionAnio" defaultValue={String(commissionYear)} className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink [color-scheme:light]">{yearOptions.map(year => <option key={year} value={year}>{year}</option>)}</select></label>
-            <label className="grid gap-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Mes</span><select name="comisionMes" defaultValue={String(commissionMonth)} className="min-h-11 rounded-xl border border-line bg-white px-3 text-sm text-ink [color-scheme:light]">{MONTHS.map(([month, label]) => <option key={month} value={month}>{label}</option>)}</select></label>
-            <button className="min-h-11 rounded-full bg-ink px-4 text-xs font-bold text-white">Consultar</button>
-          </form>
-          <CommissionTile icon={<BadgePercent />} label="Comisión del mes" value={money(commissionMonthly)} detail={`Cuotas con vencimiento en ${MONTHS.find(([value]) => value === commissionMonth)?.[1]} de ${commissionYear}`} />
-        </div>
-      </section>
-
-      <section className="mt-4">
-        <ChartPanel title="Cotizaciones vs. emisiones" description={`Años del período ${periodLabel}`}>
-          <ComparisonChart data={commercial} primaryLabel="Cotizaciones" secondaryLabel="Pólizas emitidas" />
-        </ChartPanel>
-      </section>
-
-      <section className="mt-4">
-        <ChartPanel title="Estado de cotizaciones" description="Distribución del embudo comercial">
-          <StatusChart data={statuses.rows.map((x) => ({ label: x.label, value: Number(x.value) }))} />
-        </ChartPanel>
-      </section>
-
-      {!canalId && byChannel.rows.length > 1 && (
-        <section className="mt-4">
-          <ChartPanel title="Comisión por canal" description={`Proyección de pólizas emitidas · ${periodLabel}`}>
-            <StatusChart data={byChannel.rows.map((x) => ({ label: x.label, value: Number(x.value) }))} format="currency" />
-          </ChartPanel>
-        </section>
-      )}
-
-    </AdminPage>
-  );
-}
-
-function Metric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
-  return (
-    <article className="glass-panel min-w-0 p-5">
-      <span className="text-brand [&_svg]:size-5">{icon}</span>
-      <p className="mt-7 break-words text-3xl font-bold tracking-[-0.04em]">{value}</p>
-      <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-ink-subtle">{label}</p>
-      <p className="mt-2 text-xs text-ink-subtle">{detail}</p>
-    </article>
-  );
-}
-
-function CommissionTile({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
-  return (
-    <article className="rounded-2xl border border-brand/25 bg-brand/5 p-4">
-      <span className="text-brand [&_svg]:size-4">{icon}</span>
-      <p className="mt-3 break-words text-2xl font-bold tracking-[-0.03em]">{value}</p>
-      <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-ink-subtle">{label}</p>
-      <p className="mt-1 text-[11px] text-ink-subtle">{detail}</p>
-    </article>
-  );
-}
-
-function ChartPanel({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
-  return (
-    <section className="glass-panel min-w-0 p-5 sm:p-6">
-      <header className="mb-6">
-        <h2 className="font-bold">{title}</h2>
-        <p className="mt-1 text-xs text-ink-subtle">{description}</p>
-      </header>
-      {children}
+  return <AdminPage eyebrow="Resumen de la aseguradora" title={insurerResult.data?.nombre_comercial ?? "Mi aseguradora"} description="Producción, cobranza y vencimientos de todos tus canales y productos.">
+    <section className="glass-panel mt-7 p-4 sm:p-5">
+      <SummaryScopeFilter key={`${scopeData.selectedChannelId ?? "all"}-${scopeData.selectedProductIds.join("-")}`} channels={scopeData.channels} products={scopeData.products} selectedChannelId={scopeData.selectedChannelId} selectedProductIds={scopeData.selectedProductIds} preserve={{ ...filters.periodQs, ...filters.expiryQs }} />
+      <div className="mt-4 flex flex-col gap-4 border-t border-line pt-4 lg:flex-row lg:items-start lg:justify-between"><RangePicker key={`p-${filters.periodKey}-${filters.period.from}-${filters.period.to}`} basePath="/aseguradora" label="Período" options={PERIOD_OPTIONS} activeKey={filters.periodKey} param="periodo" fromParam="desde" toParam="hasta" range={filters.period} preserve={{ ...filters.expiryQs, ...scopeQuery }} /><a href={download} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 self-start rounded-full border border-brand/50 bg-brand/10 px-5 text-sm font-bold text-ink hover:bg-brand/20"><Download className="size-4" />Descargar Excel</a></div>
+      <p className="mt-4 text-xs text-ink-subtle">Del <span className="font-semibold text-ink-muted">{day(filters.period.from)}</span> al <span className="font-semibold text-ink-muted">{day(filters.period.to)}</span>: vehículos y clientes emitidos; prima y comisión de las cuotas de cartera que vencen en esas fechas.</p>
     </section>
-  );
+
+    <section className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+      <Kpi icon={Users} label="Clientes" value={num(current.clients)} delta={delta(current.clients, previous.clients)} hint={`${num(summary.portfolioClients)} en la cartera`} />
+      <Kpi icon={BadgeDollarSign} label="Comisión del período" value={money(current.commission)} delta={delta(current.commission, previous.commission)} accent />
+      <Kpi icon={Wallet} label="Comisión proyectada" value={money(summary.futureCommission)} hint={`Cuotas por vencer de ${num(summary.futurePolicies)} ${summary.futurePolicies === 1 ? "póliza" : "pólizas"}`} />
+      <Kpi icon={CircleDollarSign} label="Prima neta del período" value={money(current.premium)} delta={delta(current.premium, previous.premium)} />
+      <Kpi icon={FileClock} label="Órdenes pendientes" value={num(summary.pendingOrders)} hint="Por emitir (hoy)" href="/aseguradora/operacion" />
+      <Kpi icon={CalendarClock} label="Próximos a vencer" value={num(summary.expiring.length)} hint={expiryLabel} href="#vencimientos" tone={summary.expiring.length ? "warn" : undefined} />
+    </section>
+
+    <section className="glass-panel mt-4 p-5 sm:p-6">
+      <div className="mb-4">
+        <h2 className="flex items-center gap-2 text-sm font-bold"><Landmark className="size-4 text-brand-text" />Cobranza</h2>
+        <p className="mt-1 text-xs text-ink-subtle">Recaudado y efectividad corresponden al período seleccionado; por cobrar y mora, a la fecha de hoy.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi icon={ReceiptText} label="Recaudado" value={money(collections.kpis.collected)} hint="Pagos registrados en el período" />
+        <Kpi icon={CircleDollarSign} label="Por cobrar" value={money(collections.kpis.receivable)} hint="Cuotas que vencen desde hoy" />
+        <Kpi icon={Wallet} label="Vencido (mora)" value={money(collections.kpis.overdue)} hint={`${plural(collections.kpis.overduePolicies, "póliza", "pólizas")} con cuotas vencidas`} tone={collections.kpis.overdue ? "warn" : undefined} />
+        <Kpi icon={BadgePercent} label="Efectividad de cobro" value={percent(collections.kpis.effectiveness)} hint={`${money(collections.kpis.duePaid)} pagado de ${money(collections.kpis.due)} exigible`} />
+      </div>
+      <div className="mt-6 border-t border-line pt-5">
+        <h3 className="text-sm font-bold">Antigüedad de la mora</h3>
+        <p className="mt-0.5 text-xs text-ink-subtle">Saldo vencido sin pagar según los días de atraso, a hoy.</p>
+        <div className="mt-4"><BarList format="currency" empty="No hay cuotas vencidas." data={collections.aging.map((bucket) => ({ label: bucket.label, sublabel: `${plural(bucket.installments, "cuota", "cuotas")} · ${plural(bucket.policies, "póliza", "pólizas")}`, value: bucket.amount }))} /></div>
+      </div>
+    </section>
+
+    {isAllChannels && <section className="glass-panel mt-4 p-5 sm:p-6"><div className="mb-4"><h2 className="text-sm font-bold">Cobranza por canal</h2><p className="mt-1 text-xs text-ink-subtle">Exigible y mora de cada canal dueño del producto.</p></div><CollectionChannelsTable rows={collections.channels} /></section>}
+
+    <section className="mt-4"><div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><h2 className="flex items-center gap-2 text-sm font-bold"><Package className="size-4 text-brand-text" />Producción por producto</h2><p className="text-xs text-ink-subtle">Cuotas de cartera que vencen en el período seleccionado</p></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{summary.products.map((product) => <article key={product.id} className="glass-panel p-5"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-bold">{product.name}</p><p className="text-xs text-ink-subtle">{product.channel ?? "Sin canal"}</p></div><span className="shrink-0 rounded-full border border-line bg-surface-muted px-2.5 py-0.5 text-[11px] font-bold text-ink-muted">{totalNet ? Math.round((product.net / totalNet) * 100) : 0} %</span></div><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-brand/10"><div className="h-full rounded-full bg-brand-text" style={{ width: `${totalNet ? (product.net / totalNet) * 100 : 0}%` }} /></div><dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3"><Stat label="Vehículos" value={num(product.policies)} /><Stat label="Clientes" value={num(product.clients)} /><Stat label="Prima neta" value={money(product.net)} /><Stat label="Prima total (inc. imp.)" value={money(product.total)} /><div className="col-span-2 border-t border-line pt-3"><Stat label="Comisión" value={money(product.commission)} /></div></dl></article>)}{!summary.products.length && <p className="glass-panel p-5 text-sm text-ink-subtle">No hay productos activos para este alcance.</p>}</div></section>
+
+    <section className="mt-4 grid gap-4 lg:grid-cols-2">
+      <ChartCard title="Vehículos emitidos por mes" subtitle="Pólizas emitidas en el período"><ColumnChart ariaLabel="Vehículos emitidos por mes" empty="Sin pólizas emitidas en el período." data={summary.monthly.map((month) => ({ label: monthLabel(month.month), sublabel: `Vehículos emitidos · ${monthLabel(month.month)}`, value: month.vehicles }))} /></ChartCard>
+      <ChartCard title="Comisión por mes" subtitle={`Cuotas que vencen cada mes · total: ${money(current.commission)}`}><AreaChart ariaLabel="Comisión por mes" empty="Sin comisiones en el período." data={summary.monthly.map((month) => ({ label: monthLabel(month.month), sublabel: `Comisión · ${monthLabel(month.month)}`, value: month.commission }))} /></ChartCard>
+      <ChartCard title="Participación por producto" subtitle="Vehículos emitidos en el período"><BarList showShare empty="Sin pólizas emitidas en el período." data={summary.products.filter((product) => product.vehicles).map((product) => ({ label: product.name, value: product.vehicles }))} /></ChartCard>
+      <ChartCard title="Marcas más aseguradas" subtitle="Top 6 del período"><BarList empty="Sin pólizas emitidas en el período." data={summary.brands.map((brand) => ({ label: brand.brand, value: brand.vehicles }))} /></ChartCard>
+      {isAllChannels && <ChartCard title="Comisión por canal" subtitle="Cuotas que vencen en el período seleccionado"><BarList format="currency" empty="Sin comisiones en el período." data={summary.channels.map((channel) => ({ label: channel.name, sublabel: `${num(channel.policies)} pólizas · prima neta ${money(channel.premium)}`, value: channel.commission }))} /></ChartCard>}
+      <ChartCard title="Vencimientos de los próximos 12 meses" subtitle="Pólizas vigentes por mes de fin de vigencia — planifica las renovaciones" wide><ColumnChart ariaLabel="Vencimientos por mes" empty="Ninguna póliza vence en los próximos 12 meses." data={summary.expiringByMonth.map((month) => ({ label: monthLabel(month.month), sublabel: `Vencen · ${monthLabel(month.month)}`, value: month.vehicles }))} /></ChartCard>
+    </section>
+
+    <section id="vencimientos" className="glass-panel mt-4 scroll-mt-24 p-5 sm:p-6"><div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><h2 className="flex items-center gap-2 text-sm font-bold"><CalendarClock className="size-4 text-brand-text" />Vehículos próximos a vencer</h2><p className="mt-1 text-xs text-ink-subtle">Pólizas vigentes cuyo fin de vigencia está entre {day(filters.expiry.from)} y {day(filters.expiry.to)}.</p></div><RangePicker key={`v-${filters.expiryKey}-${filters.expiry.from}-${filters.expiry.to}`} basePath="/aseguradora" label="Vencen" options={EXPIRY_OPTIONS} activeKey={filters.expiryKey} param="vence" fromParam="vdesde" toParam="vhasta" range={filters.expiry} preserve={{ ...filters.periodQs, ...scopeQuery }} anchor="#vencimientos" /></div><ExpiringTable rows={summary.expiring} showChannel /></section>
+  </AdminPage>;
 }
 
-function percentage(value: number, total: number) {
-  return total ? `${((value / total) * 100).toLocaleString("es-EC", { maximumFractionDigits: 1 })}%` : "0%";
+function CollectionChannelsTable({ rows }: { rows: CollectionChannel[] }) {
+  if (!rows.length) return <p className="rounded-xl border border-line bg-surface-muted px-4 py-6 text-center text-sm text-ink-muted">No hay cuotas para los canales seleccionados.</p>;
+  return <div className="overflow-x-auto rounded-2xl border border-line"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-surface-muted text-[9.5px] font-bold uppercase tracking-[0.1em] text-ink-subtle"><tr>{["Canal", "Exigible", "Pagado", "Efectividad", "Mora a hoy", "Pólizas en mora"].map((heading) => <th key={heading} className="px-3 py-2.5">{heading}</th>)}</tr></thead><tbody className="divide-y divide-line bg-white">{rows.map((row) => <tr key={row.id}><td className="px-3 py-3 font-semibold text-ink">{row.name}</td><td className="px-3 py-3">{money(row.due)}</td><td className="px-3 py-3">{money(row.paid)}</td><td className="px-3 py-3"><span className="font-semibold text-brand-text">{percent(row.effectiveness)}</span></td><td className="px-3 py-3">{money(row.overdue)}</td><td className="px-3 py-3">{num(row.overduePolicies)}</td></tr>)}</tbody></table></div>;
 }
-function money(value: number) {
-  return new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value);
+
+function plural(count: number, one: string, many: string) {
+  return `${num(count)} ${count === 1 ? one : many}`;
 }
-function monthLabel(value: string) {
-  const map: Record<string, string> = { Jan: "Ene", Feb: "Feb", Mar: "Mar", Apr: "Abr", May: "May", Jun: "Jun", Jul: "Jul", Aug: "Ago", Sep: "Sep", Oct: "Oct", Nov: "Nov", Dec: "Dic" };
-  return map[value] || value;
+
+function percent(value: number | null) {
+  return value === null ? "—" : new Intl.NumberFormat("es-EC", { style: "percent", maximumFractionDigits: 1 }).format(value);
 }

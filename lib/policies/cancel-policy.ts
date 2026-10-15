@@ -7,7 +7,12 @@ import { getDbPool } from "@/lib/db/pool";
  * Cancelación de pólizas del canal y nivelación (reglas 18 y 19 de
  * PLATAFORMA_SEGUROS_MODELO_ER.md). Las cuotas desde el mes de cancelación
  * quedan CANCELADA y se registra la nivelación (interna) de esas cuotas.
+ * Pérdida total: el mes es el del siniestro y la nivelación cobra la prima
+ * hasta el fin del año de vigencia en curso más la nivelación acumulada.
  */
+
+export type CancellationType = "NORMAL" | "PERDIDA_TOTAL";
+type CancellationRequest = { policyId: string; month: string; type?: CancellationType; lossDate?: string | null; claim?: string | null };
 
 export class CancellationError extends Error {}
 
@@ -27,10 +32,16 @@ export type CancellationPreview = {
   count: number;
   firstDue: string;
   total: string; // suma del monto de las cuotas canceladas
+  type: CancellationType;
+  lossDate: string | null;
+  /** Pérdida total: última cuota del año de vigencia en curso (prima devengada hasta aquí). */
+  yearEnd: number | null;
 };
 
-/** Valor interno: nunca se envía al navegador. */
-type Resolved = CancellationPreview & { quoteId: string; leveling: string };
+/** Valores internos: nunca se envían al navegador. */
+type Resolved = CancellationPreview & { quoteId: string; leveling: string; pendingPremium: string | null; accumulated: string | null };
+
+const isoToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Guayaquil" }).format(new Date());
 
 /** Normaliza "aaaa-mm", "aaaa-mm-dd", "mm/aaaa" o "dd/mm/aaaa" al primer día del mes (aaaa-mm-01). */
 export function toMonthStart(value: string): string | null {
@@ -47,8 +58,12 @@ function valid(year: string, month: string) {
 }
 
 /** Valida la cancelación de una póliza del canal y calcula las cuotas afectadas y la nivelación. No escribe. */
-async function resolveCancellation(conn: Queryable, channelId: string, input: { policyId: string; month: string }, lock = false): Promise<Resolved> {
-  const month = toMonthStart(input.month);
+async function resolveCancellation(conn: Queryable, channelId: string, input: CancellationRequest, lock = false): Promise<Resolved> {
+  const type = input.type ?? "NORMAL";
+  const lossDate = type === "PERDIDA_TOTAL" ? input.lossDate ?? "" : null;
+  if (lossDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(lossDate)) throw new CancellationError("Indica la fecha del siniestro.");
+  if (lossDate && lossDate > isoToday()) throw new CancellationError("La fecha del siniestro no puede ser futura.");
+  const month = lossDate ? `${lossDate.slice(0, 7)}-01` : toMonthStart(input.month);
   if (!month) throw new CancellationError("Mes de cancelación inválido (usa mm/aaaa).");
 
   const policy = await conn.query<{
@@ -70,6 +85,7 @@ async function resolveCancellation(conn: Queryable, channelId: string, input: { 
   if (!po) throw new CancellationError("La póliza no existe o no pertenece a tu canal.");
   if (po.estado === "CANCELADA") throw new CancellationError(`La póliza ${po.numero_poliza} ya está cancelada.`);
   if (po.estado !== "VIGENTE") throw new CancellationError(`La póliza ${po.numero_poliza} está ${po.estado.toLowerCase()}; solo se cancelan pólizas vigentes.`);
+  if (lossDate && lossDate < po.fecha_emision) throw new CancellationError("La fecha del siniestro es anterior a la emisión de la póliza.");
   if (month < `${po.fecha_emision.slice(0, 7)}-01`) throw new CancellationError("El mes de cancelación es anterior al mes de emisión de la póliza.");
 
   const installments = await conn.query<{ numero_cuota: number; fecha_vencimiento: string; monto: string; estado: string }>(
@@ -85,11 +101,22 @@ async function resolveCancellation(conn: Queryable, channelId: string, input: { 
   const from = cancelled[0].numero_cuota;
   const to = cancelled[cancelled.length - 1].numero_cuota;
 
-  const leveling = await conn.query<{ valor: string }>(
-    `select coalesce(sum(nivelacion_acumulada), 0)::text as valor
-     from amortizacion_mensual where cotizacion_id = $1 and mes between $2 and $3`,
-    [po.cotizacion_id, from, to],
-  );
+  // Normal: Σ nivelacion_acumulada de las cuotas canceladas (regla 19).
+  // Pérdida total: prima real hasta el fin del año en curso − nivelación acumulada al mes anterior.
+  const yearEnd = type === "PERDIDA_TOTAL" ? Math.min(Math.ceil(from / 12) * 12, installments.rows.at(-1)!.numero_cuota) : null;
+  const leveling = yearEnd === null
+    ? await conn.query<{ valor: string; pending: string | null; accumulated: string | null }>(
+        `select coalesce(sum(nivelacion_acumulada), 0)::text as valor, null as pending, null as accumulated
+         from amortizacion_mensual where cotizacion_id = $1 and mes between $2 and $3`,
+        [po.cotizacion_id, from, to],
+      )
+    : await conn.query<{ valor: string; pending: string; accumulated: string }>(
+        `select (x.pending - x.accumulated)::text as valor, x.pending::text as pending, x.accumulated::text as accumulated
+         from (select coalesce(sum(prima_total_mes) filter (where mes between $2 and $3), 0) as pending,
+                      coalesce(max(nivelacion_acumulada) filter (where mes = $2 - 1), 0) as accumulated
+               from amortizacion_mensual where cotizacion_id = $1) x`,
+        [po.cotizacion_id, from, yearEnd],
+      );
 
   return {
     policyId: po.id,
@@ -105,24 +132,28 @@ async function resolveCancellation(conn: Queryable, channelId: string, input: { 
     count: cancelled.length,
     firstDue: cancelled[0].fecha_vencimiento,
     total: (cancelled.reduce((sum, r) => sum + Math.round(Number(r.monto) * 100), 0) / 100).toFixed(2),
+    type,
+    lossDate,
+    yearEnd,
     quoteId: po.cotizacion_id,
     leveling: leveling.rows[0].valor,
+    pendingPremium: leveling.rows[0].pending,
+    accumulated: leveling.rows[0].accumulated,
   };
 }
 
 function withoutInternals(r: Resolved): CancellationPreview {
-  const { quoteId, leveling, ...preview } = r;
-  void quoteId;
-  void leveling;
+  const { quoteId, leveling, pendingPremium, accumulated, ...preview } = r;
+  void quoteId; void leveling; void pendingPremium; void accumulated;
   return preview;
 }
 
 /** Vista previa para el canal (sin el valor de nivelación). */
-export async function previewPolicyCancellation(channelId: string, input: { policyId: string; month: string }): Promise<CancellationPreview> {
+export async function previewPolicyCancellation(channelId: string, input: CancellationRequest): Promise<CancellationPreview> {
   return withoutInternals(await resolveCancellation(getDbPool(), channelId, input));
 }
 
-export type CancellationInput = { policyId: string; month: string; reason?: string | null; origin: "INDIVIDUAL" | "EXCEL"; channelId: string; userId: string };
+export type CancellationInput = CancellationRequest & { reason?: string | null; origin: "INDIVIDUAL" | "EXCEL"; channelId: string; userId: string };
 
 /** Cancela la póliza dentro de la transacción de `conn` (el llamador hace begin/commit). */
 export async function cancelPolicyWithConnection(conn: PoolClient, input: CancellationInput): Promise<CancellationPreview> {
@@ -133,20 +164,24 @@ export async function cancelPolicyWithConnection(conn: PoolClient, input: Cancel
   );
   await conn.query(`update poliza set estado = 'CANCELADA', fecha_cancelacion = $2 where id = $1`, [r.policyId, r.month]);
   const inserted = await conn.query<{ id: string }>(
-    `insert into cancelacion_poliza (poliza_id, canal_id, mes_cancelacion, cuota_desde, cuotas_canceladas, motivo, origen, usuario_id)
-     values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
-    [r.policyId, input.channelId, r.month, r.from, r.count, input.reason?.trim() || null, input.origin, input.userId],
+    `insert into cancelacion_poliza (poliza_id, canal_id, mes_cancelacion, cuota_desde, cuotas_canceladas, motivo, origen, usuario_id, tipo, fecha_siniestro, numero_reclamo)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) returning id`,
+    [r.policyId, input.channelId, r.month, r.from, r.count, input.reason?.trim() || null, input.origin, input.userId,
+      r.type, r.lossDate, r.type === "PERDIDA_TOTAL" ? input.claim?.trim() || null : null],
   );
+  // En pérdida total, cuota_hasta es el fin del año en curso (meses cuya prima se cobra).
   await conn.query(
-    `insert into nivelacion (cancelacion_id, poliza_id, cuota_desde, cuota_hasta, valor) values ($1, $2, $3, $4, $5)`,
-    [inserted.rows[0].id, r.policyId, r.from, r.to, r.leveling],
+    `insert into nivelacion (cancelacion_id, poliza_id, cuota_desde, cuota_hasta, valor, tipo, prima_pendiente, nivelacion_acumulada)
+     values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [inserted.rows[0].id, r.policyId, r.from, r.yearEnd ?? r.to, r.leveling, r.type, r.pendingPremium, r.accumulated],
   );
   await conn.query(
     `insert into auditoria (entidad, entidad_id, accion, datos_anteriores, datos_nuevos, usuario_id)
      values ('POLIZA', $1::uuid, 'CAMBIO_ESTADO', jsonb_build_object('estado', 'VIGENTE'),
              jsonb_build_object('estado', 'CANCELADA', 'mes_cancelacion', $2::text, 'cuota_desde', $3::int,
-                                'cuotas_canceladas', $4::int, 'origen', $5::text, 'cancelacion_id', $6::text), $7::uuid)`,
-    [r.policyId, r.month, r.from, r.count, input.origin, inserted.rows[0].id, input.userId],
+                                'cuotas_canceladas', $4::int, 'origen', $5::text, 'cancelacion_id', $6::text,
+                                'tipo', $8::text, 'fecha_siniestro', $9::text), $7::uuid)`,
+    [r.policyId, r.month, r.from, r.count, input.origin, inserted.rows[0].id, input.userId, r.type, r.lossDate],
   );
   return withoutInternals(r);
 }

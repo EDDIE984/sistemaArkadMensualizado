@@ -372,18 +372,32 @@ export async function resendCertificate(quoteId: string, channel: DeliveryChanne
 // ── Cancelaciones de pólizas (regla 18 del ER) ──────────────────────────────
 export type CancellationState = { status: "idle" } | { status: "error"; message: string };
 
-const cancellationSchema = z.object({
-  policyId: z.string().uuid(),
-  month: z.string().regex(/^\d{4}-\d{2}$/, "Selecciona el mes de cancelación."),
-  reason: z.string().trim().max(300, "Motivo: máximo 300 caracteres.").optional(),
-});
+const cancellationSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("NORMAL"),
+    policyId: z.string().uuid(),
+    month: z.string().regex(/^\d{4}-\d{2}$/, "Selecciona el mes de cancelación."),
+    reason: z.string().trim().max(300, "Motivo: máximo 300 caracteres.").optional(),
+  }),
+  z.object({
+    type: z.literal("PERDIDA_TOTAL"),
+    policyId: z.string().uuid(),
+    lossDate: z.string().date("Indica la fecha del siniestro."),
+    claim: z.string().trim().max(60, "Nº de reclamo: máximo 60 caracteres.").optional(),
+    reason: z.string().trim().max(300, "Motivo: máximo 300 caracteres.").optional(),
+  }),
+]);
+export type CancellationRequestInput = z.input<typeof cancellationSchema>;
 
-export async function confirmCancellation(input: { policyId: string; month: string; reason?: string }): Promise<CancellationState> {
+export async function confirmCancellation(input: CancellationRequestInput): Promise<CancellationState> {
   const session = await requireChannelUser();
   const parsed = cancellationSchema.safeParse(input);
   if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message ?? "Datos inválidos." };
   try {
-    await cancelPolicy({ ...parsed.data, origin: "INDIVIDUAL", channelId: session.channelId!, userId: session.actorId });
+    const base = { origin: "INDIVIDUAL" as const, channelId: session.channelId!, userId: session.actorId };
+    await cancelPolicy(parsed.data.type === "NORMAL"
+      ? { ...base, ...parsed.data }
+      : { ...base, ...parsed.data, month: parsed.data.lossDate.slice(0, 7) });
   } catch (error) {
     if (error instanceof CancellationError) return { status: "error", message: error.message };
     console.error("Error al cancelar la póliza", error);

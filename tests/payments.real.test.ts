@@ -186,6 +186,45 @@ async function main() {
     assert.equal(await paidCount(B.cuota(3)), payment.status === "fulfilled" ? 1 : 0, "nunca hay pago sobre una cuota cancelada");
   });
 
+  // Amortización conocida: prima_total_mes = 120 − 4·(m−1) (120 … 76), cuota fija 98, nivelación acumulada = Σ(98 − prima).
+  const amortize = (quote: string) => db.query(
+    `insert into amortizacion_mensual (cotizacion_id, mes, valor_asegurado_mes, prima_neta_mes, super_bancos, seguro_campesino, derechos_emision,
+                                       subtotal, iva, prima_total_mes, cuota_fija, diferencia, nivelacion_acumulada)
+     select $1, m, 20000, p, 0, 0, 0, p, 0, p, 98, 98 - p, sum(98 - p) over (order by m)
+     from (select m, 120 - 4 * (m - 1) as p from generate_series(1, 12) m) x`, [quote]);
+  const C = await policy("C");
+  const D = await policy("D");
+  await amortize(C.quote);
+  await amortize(D.quote);
+  const totalLoss = (lossDate: string, who = C) =>
+    cancelPolicy({ policyId: who.id, month: "", type: "PERDIDA_TOTAL", lossDate, claim: "SIN-TEST-1", origin: "INDIVIDUAL", channelId: actor.channelId, userId: actor.userId });
+
+  await step("pérdida total: rechaza siniestro futuro o anterior a la emisión", async () => {
+    await assert.rejects(totalLoss("2999-01-01"), (e: unknown) => e instanceof CancellationError && /futura/.test(e.message));
+    await assert.rejects(totalLoss("2026-01-09"), (e: unknown) => e instanceof CancellationError && /anterior a la emisión/.test(e.message));
+    assert.equal(await state(C.cuota(3)), "PENDIENTE");
+  });
+  await step("pérdida total: cancela desde el mes del siniestro y nivela hasta el fin del año en curso", async () => {
+    const r = await totalLoss("2026-04-15"); // cuota 3 vence el 10/04/2026
+    assert.equal(r.from, 3);
+    assert.equal(r.yearEnd, 12);
+    assert.equal(await state(C.cuota(2)), "PENDIENTE");
+    assert.equal(await state(C.cuota(3)), "CANCELADA");
+    const cp = (await db.query(`select tipo, fecha_siniestro::text, numero_reclamo, mes_cancelacion::text from cancelacion_poliza where poliza_id = $1`, [C.id])).rows[0];
+    assert.deepEqual(cp, { tipo: "PERDIDA_TOTAL", fecha_siniestro: "2026-04-15", numero_reclamo: "SIN-TEST-1", mes_cancelacion: "2026-04-01" });
+    // prima pendiente = Σ prima(3..12) = 112 + … + 76 = 940; nivelación acumulada al mes 2 = (98−120) + (98−116) = −40; valor = 980.
+    const n = (await db.query(`select tipo, cuota_desde, cuota_hasta, valor::float, prima_pendiente::float, nivelacion_acumulada::float from nivelacion where poliza_id = $1`, [C.id])).rows[0];
+    assert.deepEqual(n, { tipo: "PERDIDA_TOTAL", cuota_desde: 3, cuota_hasta: 12, valor: 980, prima_pendiente: 940, nivelacion_acumulada: -40 });
+  });
+  await step("cancelación normal: la nivelación sigue siendo Σ nivelacion_acumulada de las cuotas canceladas", async () => {
+    await cancelPolicy({ policyId: D.id, month: "2026-06", origin: "INDIVIDUAL", channelId: actor.channelId, userId: actor.userId }); // desde la cuota 5
+    const expected = Number((await db.query(`select sum(nivelacion_acumulada)::float s from amortizacion_mensual where cotizacion_id = $1 and mes between 5 and 12`, [D.quote])).rows[0].s);
+    const n = (await db.query(`select tipo, cuota_desde, cuota_hasta, valor::float, prima_pendiente from nivelacion where poliza_id = $1`, [D.id])).rows[0];
+    assert.deepEqual(n, { tipo: "NORMAL", cuota_desde: 5, cuota_hasta: 12, valor: expected, prima_pendiente: null });
+    const cp = (await db.query(`select tipo, fecha_siniestro from cancelacion_poliza where poliza_id = $1`, [D.id])).rows[0];
+    assert.deepEqual(cp, { tipo: "NORMAL", fecha_siniestro: null });
+  });
+
   console.log(`\nOK: ${passed} pruebas pasaron sobre la base real.`);
 }
 

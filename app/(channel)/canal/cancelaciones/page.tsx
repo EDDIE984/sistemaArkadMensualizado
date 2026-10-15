@@ -15,6 +15,7 @@ type Row = {
   marca: string | null; modelo: string | null; placa: string | null; producto: string;
   fecha_emision: string; mes_cancelacion: string; cuota_desde: number; cuotas_canceladas: number; total_cuotas: number; valor: string;
   motivo: string | null; origen: "INDIVIDUAL" | "EXCEL"; creado_en: string; usuario: string | null;
+  tipo: "NORMAL" | "PERDIDA_TOTAL"; fecha_siniestro: string | null; numero_reclamo: string | null;
 };
 
 const LIMIT = 100;
@@ -31,7 +32,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
             v.marca, v.modelo, v.placa, p.nombre as producto, po.fecha_emision::text, cp.mes_cancelacion::text,
             cp.cuota_desde, cp.cuotas_canceladas, (select count(*)::int from tabla_cobranza t where t.poliza_id = po.id) as total_cuotas,
             (select coalesce(sum(t.monto), 0)::text from tabla_cobranza t where t.poliza_id = po.id and t.numero_cuota >= cp.cuota_desde) as valor,
-            cp.motivo, cp.origen, cp.creado_en::text, u.nombre as usuario
+            cp.motivo, cp.origen, cp.creado_en::text, u.nombre as usuario,
+            cp.tipo, cp.fecha_siniestro::text, cp.numero_reclamo
      from cancelacion_poliza cp
      join poliza po on po.id = cp.poliza_id
      join cotizacion c on c.id = po.cotizacion_id
@@ -100,6 +102,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
                       <p className="text-xs text-ink-subtle">{r.identificacion ?? "Sin identificación"}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                      {r.tipo === "PERDIDA_TOTAL" && <span className="rounded-full border border-ink/20 bg-ink px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">Pérdida total · siniestro {day(r.fecha_siniestro!)}{r.numero_reclamo ? ` · reclamo ${r.numero_reclamo}` : ""}</span>}
                       <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700">Cancelada desde cuota {r.cuota_desde}</span>
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-muted px-2.5 py-0.5 text-[11px] text-ink-muted">
                         {r.origen === "EXCEL" ? <FileSpreadsheet className="size-3 text-brand-text" /> : <SearchCheck className="size-3 text-brand-text" />}

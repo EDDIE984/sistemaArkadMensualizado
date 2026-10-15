@@ -3,82 +3,118 @@ import "server-only";
 import { getDbPool } from "@/lib/db/pool";
 
 /*
- * Tablero del canal (Resumen). Todo se filtra por `cotizacion.canal_id`.
- * "Emitido" = póliza emitida por la aseguradora (`poliza.fecha_emision`): vehículos, clientes, marcas.
- * "Producción" = cuotas de toda la cartera del canal que vencen en el período
- * (`tabla_cobranza.fecha_vencimiento`), con su desglose de `amortizacion_mensual`; sin las
- * cuotas canceladas (regla 18). Prima y comisión del tablero y del Excel salen de aquí.
+ * Resúmenes de canal y aseguradora. El alcance siempre sigue al canal dueño
+ * del producto (`producto.canal_id`), nunca al `cotizacion.canal_id`: así las
+ * cotizaciones de autogestión se atribuyen al producto INDIVIDUAL correcto.
  */
 
 export type Period = { from: string; to: string };
+export type SummaryScope = { insurerId: string | null; channelId: string | null; productIds: string[] };
 
 const TZ_TODAY = "(now() at time zone 'America/Guayaquil')::date";
 
-/** Pólizas del canal emitidas en el período (CTE reutilizable). $1 canal, $2 desde, $3 hasta. */
+// Parámetros compartidos: $1 aseguradora, $2 canal dueño del producto,
+// $3 productos. Las fechas de los CTE de período son siempre $4 y $5.
+const SCOPE_WHERE = `
+  where ($1::uuid is null or c.aseguradora_id = $1)
+    and ($2::uuid is null or p.canal_id = $2)
+    and (cardinality($3::uuid[]) = 0 or c.producto_id = any($3::uuid[]))`;
+
+/** Pólizas emitidas en el período. */
 const ISSUED = `
   issued as (
-    select po.id as poliza_id, po.fecha_emision, c.cliente_id, c.producto_id, c.vehiculo_id
+    select po.id as poliza_id, po.fecha_emision, c.cliente_id, c.producto_id, c.vehiculo_id, p.canal_id as channel_id
     from poliza po
     join cotizacion c on c.id = po.cotizacion_id
-    where c.canal_id = $1 and po.fecha_emision between $2::date and $3::date
+    join producto p on p.id = c.producto_id
+    ${SCOPE_WHERE} and po.fecha_emision between $4::date and $5::date
   )`;
 
-/** Cuotas de la cartera del canal que vencen en el período, con su desglose (CTE reutilizable). $1 canal, $2 desde, $3 hasta. */
+/** Cuotas no canceladas que vencen en el período, con su desglose mensual. */
 const PRODUCTION = `
   production as (
-    select po.id as poliza_id, c.id as cotizacion_id, c.cliente_id, c.producto_id, c.vehiculo_id, t.fecha_vencimiento,
-           m.prima_neta_mes, m.super_bancos, m.seguro_campesino, m.derechos_emision, m.subtotal, m.iva, m.prima_total_mes, m.comision_canal
+    select po.id as poliza_id, c.id as cotizacion_id, c.cliente_id, c.producto_id, c.vehiculo_id, p.canal_id as channel_id,
+           t.fecha_vencimiento, m.prima_neta_mes, m.super_bancos, m.seguro_campesino, m.derechos_emision,
+           m.subtotal, m.iva, m.prima_total_mes, m.comision_canal
     from poliza po
     join cotizacion c on c.id = po.cotizacion_id
+    join producto p on p.id = c.producto_id
     join tabla_cobranza t on t.poliza_id = po.id
     join amortizacion_mensual m on m.cotizacion_id = c.id and m.mes = t.numero_cuota
-    where c.canal_id = $1 and t.estado <> 'CANCELADA' and t.fecha_vencimiento between $2::date and $3::date
+    ${SCOPE_WHERE} and t.estado <> 'CANCELADA' and t.fecha_vencimiento between $4::date and $5::date
   )`;
+
+const scopeValues = (scope: SummaryScope) => [scope.insurerId, scope.channelId, scope.productIds];
 
 export type SummaryKpis = { vehicles: number; clients: number; commission: number; premium: number };
 
-async function kpis(channelId: string, p: Period): Promise<SummaryKpis> {
-  const { rows } = await getDbPool().query(
+async function kpis(scope: SummaryScope, period: Period): Promise<SummaryKpis> {
+  const { rows } = await getDbPool().query<SummaryKpis>(
     `with ${ISSUED}, ${PRODUCTION}
-     select (select count(*)::int from issued) as vehicles, (select count(distinct cliente_id)::int from issued) as clients,
+     select (select count(*)::int from issued) as vehicles,
+            (select count(distinct cliente_id)::int from issued) as clients,
             (select coalesce(sum(comision_canal), 0)::float from production) as commission,
             (select coalesce(sum(prima_neta_mes), 0)::float from production) as premium`,
-    [channelId, p.from, p.to],
+    [...scopeValues(scope), period.from, period.to],
   );
   return rows[0];
 }
 
 /** Período anterior de la misma duración, para las variaciones de los KPI. */
-export function previousPeriod(p: Period): Period {
-  const from = new Date(`${p.from}T12:00:00Z`);
-  const to = new Date(`${p.to}T12:00:00Z`);
+export function previousPeriod(period: Period): Period {
+  const from = new Date(`${period.from}T12:00:00Z`);
+  const to = new Date(`${period.to}T12:00:00Z`);
   const days = Math.round((to.getTime() - from.getTime()) / 86400000) + 1;
-  const prevTo = new Date(from.getTime() - 86400000);
-  const prevFrom = new Date(prevTo.getTime() - (days - 1) * 86400000);
-  return { from: prevFrom.toISOString().slice(0, 10), to: prevTo.toISOString().slice(0, 10) };
+  const previousTo = new Date(from.getTime() - 86400000);
+  const previousFrom = new Date(previousTo.getTime() - (days - 1) * 86400000);
+  return { from: previousFrom.toISOString().slice(0, 10), to: previousTo.toISOString().slice(0, 10) };
 }
 
-export async function getSummary(channelId: string, period: Period, expiry: Period) {
+export type SummaryProduct = {
+  id: string; name: string; insurer: string; channel: string | null; vehicles: number; policies: number; clients: number;
+  net: number; total: number; commission: number;
+};
+export type SummaryMonth = { month: string; vehicles: number; commission: number };
+export type SummaryChannel = { id: string; name: string; commission: number; premium: number; policies: number };
+
+export async function getSummary(scope: SummaryScope, period: Period, expiry: Period) {
   const db = getDbPool();
-  const args = [channelId, period.from, period.to];
-  const [current, previous, future, pending, portfolio, products, monthly, brands, expiring, expiringByMonth] = await Promise.all([
-    kpis(channelId, period),
-    kpis(channelId, previousPeriod(period)),
-    // Comisiones futuras: cuotas por vencer de toda la cartera del canal, sin las canceladas.
+  const args = [...scopeValues(scope), period.from, period.to];
+  const [current, previous, future, pending, portfolio, products, monthly, brands, expiring, expiringByMonth, channels] = await Promise.all([
+    kpis(scope, period),
+    kpis(scope, previousPeriod(period)),
+    // Comisión proyectada = cuotas futuras de la cartera, sin las canceladas.
     db.query<{ commission: number; policies: number }>(
       `select coalesce(sum(m.comision_canal), 0)::float as commission, count(distinct po.id)::int as policies
        from poliza po
        join cotizacion c on c.id = po.cotizacion_id
+       join producto p on p.id = c.producto_id
        join tabla_cobranza t on t.poliza_id = po.id
        join amortizacion_mensual m on m.cotizacion_id = c.id and m.mes = t.numero_cuota
-       where c.canal_id = $1 and t.estado <> 'CANCELADA' and t.fecha_vencimiento > ${TZ_TODAY}`,
-      [channelId],
+       ${SCOPE_WHERE} and t.estado <> 'CANCELADA' and t.fecha_vencimiento > ${TZ_TODAY}`,
+      scopeValues(scope),
     ),
-    db.query(`select count(*)::int as n from cotizacion where canal_id = $1 and estado = 'PENDIENTE'`, [channelId]),
-    db.query(`select count(*)::int as n from canal_cliente where canal_id = $1`, [channelId]),
-    // Todos los productos del canal (aunque no tengan movimiento). `vehicles` = emitidos en el período;
-    // `policies`/`clients` y montos = producción (cuotas que vencen en el período).
-    db.query<{ id: string; name: string; insurer: string; vehicles: number; policies: number; clients: number; net: number; total: number; commission: number }>(
+    db.query<{ n: number }>(
+      `select count(*)::int as n
+       from cotizacion c
+       join producto p on p.id = c.producto_id
+       ${SCOPE_WHERE} and c.estado = 'PENDIENTE'`,
+      scopeValues(scope),
+    ),
+    // El tablero de canal mantiene su cartera explícita; para aseguradora la
+    // cartera es la de clientes con pólizas dentro del alcance elegido.
+    scope.insurerId === null && scope.channelId
+      ? db.query<{ n: number }>(`select count(*)::int as n from canal_cliente where canal_id = $1`, [scope.channelId])
+      : db.query<{ n: number }>(
+          `select count(distinct c.cliente_id)::int as n
+           from poliza po
+           join cotizacion c on c.id = po.cotizacion_id
+           join producto p on p.id = c.producto_id
+           ${SCOPE_WHERE}`,
+          scopeValues(scope),
+        ),
+    // Productos del alcance aunque no tengan movimiento; la aseguradora solo ve los activos.
+    db.query<SummaryProduct>(
       `with ${ISSUED}, ${PRODUCTION},
        prod as (
          select producto_id, count(distinct poliza_id)::int as policies, count(distinct cliente_id)::int as clients,
@@ -86,21 +122,25 @@ export async function getSummary(channelId: string, period: Period, expiry: Peri
          from production group by producto_id
        ),
        iss as (select producto_id, count(*)::int as vehicles from issued group by producto_id)
-       select p.id, p.nombre as name, a.nombre_comercial as insurer,
-              coalesce(iss.vehicles, 0) as vehicles, coalesce(prod.policies, 0) as policies, coalesce(prod.clients, 0) as clients,
-              coalesce(prod.net, 0) as net, coalesce(prod.total, 0) as total, coalesce(prod.commission, 0) as commission
+       select p.id, p.nombre as name, a.nombre_comercial as insurer, ch.nombre as channel,
+              coalesce(iss.vehicles, 0)::int as vehicles, coalesce(prod.policies, 0)::int as policies,
+              coalesce(prod.clients, 0)::int as clients, coalesce(prod.net, 0)::float as net,
+              coalesce(prod.total, 0)::float as total, coalesce(prod.commission, 0)::float as commission
        from producto p
        join aseguradora a on a.id = p.aseguradora_id
+       left join canal ch on ch.id = p.canal_id
        left join prod on prod.producto_id = p.id
        left join iss on iss.producto_id = p.id
-       where p.canal_id = $1
+       where ($1::uuid is null or p.activo)
+         and ($1::uuid is null or p.aseguradora_id = $1)
+         and ($2::uuid is null or p.canal_id = $2)
+         and (cardinality($3::uuid[]) = 0 or p.id = any($3::uuid[]))
        order by policies desc, vehicles desc, p.nombre`,
       args,
     ),
-    // Un registro por mes del período, con 0 donde no hubo emisiones ni cuotas.
-    db.query<{ month: string; vehicles: number; commission: number }>(
+    db.query<SummaryMonth>(
       `with ${ISSUED}, ${PRODUCTION},
-       months as (select generate_series(date_trunc('month', $2::date), date_trunc('month', $3::date), interval '1 month')::date as m)
+       months as (select generate_series(date_trunc('month', $4::date), date_trunc('month', $5::date), interval '1 month')::date as m)
        select to_char(months.m, 'YYYY-MM') as month,
               (select count(*)::int from issued i where date_trunc('month', i.fecha_emision) = months.m) as vehicles,
               (select coalesce(sum(x.comision_canal), 0)::float from production x where date_trunc('month', x.fecha_vencimiento) = months.m) as commission
@@ -114,51 +154,70 @@ export async function getSummary(channelId: string, period: Period, expiry: Peri
        group by initcap(lower(v.marca)) order by vehicles desc, brand limit 6`,
       args,
     ),
-    getExpiring(channelId, expiry),
+    getExpiring(scope, expiry),
     db.query<{ month: string; vehicles: number }>(
-      `with months as (select generate_series(date_trunc('month', ${TZ_TODAY}), date_trunc('month', ${TZ_TODAY}) + interval '11 months', interval '1 month')::date as m)
-       select to_char(months.m, 'YYYY-MM') as month, count(po.id)::int as vehicles
-       from months
-       left join (poliza po join cotizacion c on c.id = po.cotizacion_id and c.canal_id = $1 and po.estado = 'VIGENTE')
-         on date_trunc('month', po.fecha_fin_vigencia) = months.m and po.fecha_fin_vigencia >= ${TZ_TODAY}
+      `with months as (
+         select generate_series(date_trunc('month', ${TZ_TODAY}), date_trunc('month', ${TZ_TODAY}) + interval '11 months', interval '1 month')::date as m
+       ), scoped as (
+         select po.id, po.fecha_fin_vigencia
+         from poliza po
+         join cotizacion c on c.id = po.cotizacion_id
+         join producto p on p.id = c.producto_id
+         ${SCOPE_WHERE} and po.estado = 'VIGENTE' and po.fecha_fin_vigencia >= ${TZ_TODAY}
+       )
+       select to_char(months.m, 'YYYY-MM') as month, count(scoped.id)::int as vehicles
+       from months left join scoped on date_trunc('month', scoped.fecha_fin_vigencia) = months.m
        group by months.m order by months.m`,
-      [channelId],
+      scopeValues(scope),
+    ),
+    db.query<SummaryChannel>(
+      `with ${PRODUCTION}
+       select ch.id, ch.nombre as name, coalesce(sum(x.comision_canal), 0)::float as commission,
+              coalesce(sum(x.prima_neta_mes), 0)::float as premium, count(distinct x.poliza_id)::int as policies
+       from production x
+       join canal ch on ch.id = x.channel_id
+       group by ch.id, ch.nombre
+       order by commission desc, ch.nombre`,
+      args,
     ),
   ]);
+
   return {
     current,
     previous,
     futureCommission: future.rows[0].commission,
     futurePolicies: future.rows[0].policies,
-    pendingOrders: pending.rows[0].n as number,
-    portfolioClients: portfolio.rows[0].n as number,
+    pendingOrders: pending.rows[0].n,
+    portfolioClients: portfolio.rows[0].n,
     products: products.rows,
     monthly: monthly.rows,
     brands: brands.rows,
     expiring,
     expiringByMonth: expiringByMonth.rows,
+    channels: channels.rows,
   };
 }
 
 export type ExpiringPolicy = {
   quoteId: string; client: string; identification: string | null; phone: string | null; email: string | null;
-  brand: string; model: string; plate: string | null; product: string; policy: string; end: string; days: number;
+  brand: string; model: string; plate: string | null; product: string; channel: string | null; policy: string; end: string; days: number;
 };
 
-/** Pólizas vigentes del canal que vencen dentro de la ventana. */
-export async function getExpiring(channelId: string, w: Period): Promise<ExpiringPolicy[]> {
+/** Pólizas vigentes del alcance que vencen dentro de la ventana. */
+export async function getExpiring(scope: SummaryScope, window: Period): Promise<ExpiringPolicy[]> {
   const { rows } = await getDbPool().query<ExpiringPolicy>(
     `select c.id as "quoteId", cl.nombre_razon_social as client, cl.identificacion as identification, cl.telefono as phone, cl.email,
-            v.marca as brand, v.modelo as model, v.placa as plate, p.nombre as product, po.numero_poliza as policy,
+            v.marca as brand, v.modelo as model, v.placa as plate, p.nombre as product, ch.nombre as channel, po.numero_poliza as policy,
             po.fecha_fin_vigencia::text as "end", (po.fecha_fin_vigencia - ${TZ_TODAY})::int as days
      from poliza po
      join cotizacion c on c.id = po.cotizacion_id
+     join producto p on p.id = c.producto_id
      join cliente cl on cl.id = c.cliente_id
      join vehiculo v on v.id = c.vehiculo_id
-     join producto p on p.id = c.producto_id
-     where c.canal_id = $1 and po.estado = 'VIGENTE' and po.fecha_fin_vigencia between $2::date and $3::date
+     left join canal ch on ch.id = p.canal_id
+     ${SCOPE_WHERE} and po.estado = 'VIGENTE' and po.fecha_fin_vigencia between $4::date and $5::date
      order by po.fecha_fin_vigencia, cl.nombre_razon_social`,
-    [channelId, w.from, w.to],
+    [...scopeValues(scope), window.from, window.to],
   );
   return rows;
 }
@@ -166,25 +225,25 @@ export async function getExpiring(channelId: string, w: Period): Promise<Expirin
 export type ProductionDetail = {
   client: string; identification: string | null; email: string | null; phone: string | null; city: string | null;
   brand: string; model: string; year: number | null; color: string | null; plate: string | null; insuredValue: number;
-  product: string; insurer: string; policy: string; issued: string; start: string; end: string; installments: number;
+  product: string; insurer: string; channel: string | null; policy: string; issued: string; start: string; end: string; installments: number;
   net: number; superBancos: number; seguroCampesino: number; derechosEmision: number;
   subtotal: number; iva: number; total: number; commission: number;
 };
 
-/** Producción del período por póliza (para la descarga): suma de sus cuotas que vencen en el período. */
-export async function getProductionDetail(channelId: string, p: Period): Promise<ProductionDetail[]> {
+/** Producción del período por póliza: suma de sus cuotas con vencimiento en el rango. */
+export async function getProductionDetail(scope: SummaryScope, period: Period): Promise<ProductionDetail[]> {
   const { rows } = await getDbPool().query<ProductionDetail>(
     `with ${PRODUCTION},
      per_policy as (
-       select poliza_id, cliente_id, producto_id, vehiculo_id, count(*)::int as installments,
+       select poliza_id, cliente_id, producto_id, vehiculo_id, channel_id, count(*)::int as installments,
               sum(prima_neta_mes)::float as net, sum(super_bancos)::float as "superBancos", sum(seguro_campesino)::float as "seguroCampesino",
               sum(derechos_emision)::float as "derechosEmision", sum(subtotal)::float as subtotal, sum(iva)::float as iva,
               sum(prima_total_mes)::float as total, sum(comision_canal)::float as commission
-       from production group by poliza_id, cliente_id, producto_id, vehiculo_id
+       from production group by poliza_id, cliente_id, producto_id, vehiculo_id, channel_id
      )
      select cl.nombre_razon_social as client, cl.identificacion as identification, cl.email, cl.telefono as phone, ci.nombre as city,
             v.marca as brand, v.modelo as model, v.anio as year, v.color, v.placa as plate, v.valor_asegurado::float as "insuredValue",
-            pr.nombre as product, a.nombre_comercial as insurer, po.numero_poliza as policy,
+            pr.nombre as product, a.nombre_comercial as insurer, ch.nombre as channel, po.numero_poliza as policy,
             po.fecha_emision::text as issued, po.fecha_inicio_vigencia::text as start, po.fecha_fin_vigencia::text as "end",
             x.installments, x.net, x."superBancos", x."seguroCampesino", x."derechosEmision", x.subtotal, x.iva, x.total, x.commission
      from per_policy x
@@ -194,8 +253,9 @@ export async function getProductionDetail(channelId: string, p: Period): Promise
      join vehiculo v on v.id = x.vehiculo_id
      join producto pr on pr.id = x.producto_id
      join aseguradora a on a.id = pr.aseguradora_id
+     left join canal ch on ch.id = x.channel_id
      order by po.fecha_emision desc, cl.nombre_razon_social`,
-    [channelId, p.from, p.to],
+    [...scopeValues(scope), period.from, period.to],
   );
   return rows;
 }
@@ -205,11 +265,11 @@ export async function getProductionDetail(channelId: string, p: Period): Promise
 const isoToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Guayaquil" }).format(new Date());
 const addDays = (iso: string, n: number) => new Date(new Date(`${iso}T12:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
 const addMonths = (iso: string, n: number) => {
-  const d = new Date(`${iso}T12:00:00Z`);
-  d.setUTCMonth(d.getUTCMonth() + n);
-  return d.toISOString().slice(0, 10);
+  const date = new Date(`${iso}T12:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() + n);
+  return date.toISOString().slice(0, 10);
 };
-const validDate = (v: string | undefined) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) ? v : null);
+const validDate = (value: string | undefined) => (value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) ? value : null);
 
 export const PERIOD_OPTIONS = [
   { key: "3m", label: "Últimos 3 meses" },
@@ -227,32 +287,29 @@ export const EXPIRY_OPTIONS = [
 
 type SummaryParams = { periodo?: string; desde?: string; hasta?: string; vence?: string; vdesde?: string; vhasta?: string };
 
-function ordered(a: string, b: string): Period {
-  return a <= b ? { from: a, to: b } : { from: b, to: a };
+function ordered(first: string, second: string): Period {
+  return first <= second ? { from: first, to: second } : { from: second, to: first };
 }
 
-/**
- * Lee los filtros de la URL. Cada filtro tiene UNA sola forma de elegirse:
- * - `periodo`: 3m | 6m | 12m (por defecto) | anio | rango (con `desde`/`hasta`).
- * - `vence`: 30 | 60 (por defecto) | 90 | rango (con `vdesde`/`vhasta`).
- */
-export function parseSummaryFilters(sp: SummaryParams) {
+/** Lee los filtros de período y vencimientos, con rangos inclusivos. */
+export function parseSummaryFilters(params: SummaryParams) {
   const today = isoToday();
-  const lastMonths = (n: number): Period => ({ from: addDays(addMonths(today, -n), 1), to: today });
-
-  let periodKey: string = PERIOD_OPTIONS.some((o) => o.key === sp.periodo) ? sp.periodo! : "12m";
+  const lastMonths = (months: number): Period => ({ from: addDays(addMonths(today, -months), 1), to: today });
+  let periodKey: string = PERIOD_OPTIONS.some((option) => option.key === params.periodo) ? params.periodo! : "12m";
+  const from = validDate(params.desde);
+  const to = validDate(params.hasta);
   let period: Period;
-  const desde = validDate(sp.desde), hasta = validDate(sp.hasta);
-  if (periodKey === "rango" && desde && hasta) period = ordered(desde, hasta);
+  if (periodKey === "rango" && from && to) period = ordered(from, to);
   else if (periodKey === "3m") period = lastMonths(3);
   else if (periodKey === "6m") period = lastMonths(6);
   else if (periodKey === "anio") period = { from: `${today.slice(0, 4)}-01-01`, to: today };
   else { periodKey = "12m"; period = lastMonths(12); }
 
-  let expiryKey: string = EXPIRY_OPTIONS.some((o) => o.key === sp.vence) ? sp.vence! : "60";
+  let expiryKey: string = EXPIRY_OPTIONS.some((option) => option.key === params.vence) ? params.vence! : "60";
+  const expiryFrom = validDate(params.vdesde);
+  const expiryTo = validDate(params.vhasta);
   let expiry: Period;
-  const vdesde = validDate(sp.vdesde), vhasta = validDate(sp.vhasta);
-  if (expiryKey === "rango" && vdesde && vhasta) expiry = ordered(vdesde, vhasta);
+  if (expiryKey === "rango" && expiryFrom && expiryTo) expiry = ordered(expiryFrom, expiryTo);
   else { if (expiryKey === "rango") expiryKey = "60"; expiry = { from: today, to: addDays(today, Number(expiryKey)) }; }
 
   const periodQs: Record<string, string> = periodKey === "rango" ? { periodo: "rango", desde: period.from, hasta: period.to } : { periodo: periodKey };

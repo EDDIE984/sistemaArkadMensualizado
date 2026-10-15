@@ -158,9 +158,9 @@ export function BarList({ data, format = "number", showShare = false, empty }: {
     <ul className="grid gap-3.5">
       {data.map((d) => (
         <li key={d.label} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)]">
-          <span className="truncate text-xs font-semibold text-ink-muted" title={d.label}>{d.label}</span>
+          <span className="min-w-0"><span className="block truncate text-xs font-semibold text-ink-muted" title={d.label}>{d.label}</span>{d.sublabel && <span className="block truncate text-[11px] text-ink-subtle" title={d.sublabel}>{d.sublabel}</span>}</span>
           <span className="flex min-w-0 items-center gap-2">
-            <span className="h-3 rounded-r-[4px] bg-brand-text" style={{ width: `${Math.max(1, (d.value / max) * 78)}%` }} />
+            {d.value > 0 && <span className="h-3 rounded-r-[4px] bg-brand-text" style={{ width: `${Math.max(1, (d.value / max) * 78)}%` }} />}
             <span className="shrink-0 text-xs font-bold text-ink">
               {fmt(d.value, format)}{showShare && total ? <span className="ml-1 font-normal text-ink-subtle">· {Math.round((d.value / total) * 100)} %</span> : null}
             </span>

@@ -153,6 +153,10 @@ erDiagram
         uuid aseguradora_id FK
         string nombre "EMPRESAS | INDIVIDUAL | personalizado"
         string descripcion
+        string ruc "opcional, 13 dígitos"
+        string direccion "opcional"
+        string telefono "opcional"
+        string contacto_nombre "opcional, persona de contacto"
         boolean activo
     }
 
@@ -556,6 +560,9 @@ erDiagram
         int cuotas_canceladas
         string motivo "nullable"
         string origen "INDIVIDUAL|EXCEL"
+        string tipo "NORMAL|PERDIDA_TOTAL"
+        date fecha_siniestro "solo PERDIDA_TOTAL"
+        string numero_reclamo "nullable"
         uuid usuario_id FK
         timestamp creado_en
     }
@@ -566,7 +573,10 @@ erDiagram
         uuid poliza_id FK
         int cuota_desde
         int cuota_hasta
-        decimal valor "suma de nivelacion_acumulada de las cuotas canceladas"
+        string tipo "NORMAL|PERDIDA_TOTAL"
+        decimal valor "NORMAL: suma de nivelacion_acumulada de las cuotas canceladas; PERDIDA_TOTAL: prima_pendiente - nivelacion_acumulada"
+        decimal prima_pendiente "solo PERDIDA_TOTAL"
+        decimal nivelacion_acumulada "solo PERDIDA_TOTAL: acumulada al mes anterior al siniestro"
         string estado "PENDIENTE"
         timestamp creado_en
     }
@@ -580,6 +590,8 @@ erDiagram
         string referencia
         uuid usuario_registro_id FK
         string estado "REGISTRADO|ANULADO"
+        timestamptz conciliado_en "null = por conciliar"
+        uuid conciliado_por_id FK "usuario ADMIN_ASEGURADORA"
     }
 
     AUDITORIA {
@@ -817,6 +829,10 @@ motivo opcional; validación previa y guardado todo o nada). En una transacción
 3. `POLIZA.estado = 'CANCELADA'`, `POLIZA.fecha_cancelacion = mes de cancelación`.
 4. `INSERT CANCELACION_POLIZA` + `INSERT NIVELACION` + `AUDITORIA`.
 
+En la cancelación individual se elige el **tipo**: normal (mes de cancelación)
+o **pérdida total** (fecha del siniestro y número de reclamo opcional; el mes
+de cancelación es el del siniestro). Ver regla 19 para su nivelación.
+
 ### Variante: inspección fotográfica de la cotización (informativa)
 
 Una vez creada la `COTIZACION`, en su pantalla de detalle aparece un botón
@@ -1014,6 +1030,17 @@ vía `datos_nuevos.accion`), no cada foto ni cada daño.
     `comision_canal_pct > 0` también la registra, aunque su cotización no tenga
     `canal_id`; por eso debe mantenerse en 0 salvo que se quiera reservar un
     corte interno sin canal externo.
+    **Resumen de la aseguradora** (`ADMIN_ASEGURADORA`): mismos cálculos que el
+    Resumen del canal (producción por cuotas del período, comisión del período,
+    comisión proyectada = cuotas por vencer sin `CANCELADA`, vencimientos), pero
+    sobre toda la aseguradora. El alcance sigue al **canal dueño del producto**
+    (`PRODUCTO.canal_id`), no a `COTIZACION.canal_id`, para que la autogestión
+    (cotización sin canal) se atribuya al canal `INDIVIDUAL` de su producto. Los
+    filtros son dependientes: Canal (todos o uno activo de la aseguradora) →
+    Productos (todos o los `activo` del canal elegido); cualquier id ajeno a la
+    aseguradora de la sesión se descarta. Las cards por producto de la
+    aseguradora muestran solo productos activos; el Resumen del canal muestra
+    todos sus productos.
 16. **Inspección fotográfica (informativa).** `INSPECCION` es 1:0..1 con
     `COTIZACION` (`unique(cotizacion_id)`) y sólo existe si el cliente (autogestión)
     o el agente de canal la inicia desde el detalle de la cotización. La
@@ -1123,6 +1150,19 @@ vía `datos_nuevos.accion`), no cada foto ni cada daño.
     los meses `cuota_desde .. cuota_hasta` (las cuotas canceladas). Es un
     valor **interno**: no se muestra al canal ni al cliente. Queda en estado
     `PENDIENTE` hasta que se defina su cobro/visualización.
+    - **Pérdida total** (`tipo = 'PERDIDA_TOTAL'`, solo cancelación
+      individual): la prima se considera devengada hasta el **fin del año de
+      vigencia en curso**. Con `k` = primera cuota cancelada (mes del
+      siniestro) y `H = min(ceil(k/12)·12, última cuota)`:
+      `prima_pendiente = Σ prima_total_mes (k..H)`,
+      `nivelacion_acumulada = AMORTIZACION_MENSUAL.nivelacion_acumulada` del
+      mes `k−1` (0 si `k = 1`) y `valor = prima_pendiente − nivelacion_acumulada`
+      (prima devengada hasta el fin del año menos las cuotas fijas de los meses
+      anteriores). Es el valor a descontar de la indemnización; se guarda con su
+      desglose y `NIVELACION.cuota_hasta = H`. La fecha del siniestro no puede
+      ser futura ni anterior a la emisión. El canal ve que la póliza se canceló
+      por pérdida total (fecha y reclamo), nunca el valor; la aseguradora ve el
+      desglose en el detalle de la póliza.
 
 ---
 
@@ -1251,12 +1291,70 @@ la cuota, independiente de la fecha en que se registra el pago.
 - El estado vencido de consulta incluye cuotas pendientes cuya fecha de
   vencimiento es anterior a hoy en `America/Guayaquil`.
 
+**Indicadores de cobranza del Resumen de la aseguradora** (mismo alcance de la
+regla 15; cuotas sin `CANCELADA`, pagos con `estado = 'REGISTRADO'`, "hoy" en
+`America/Guayaquil`):
+
+- **Recaudado:** `SUM(PAGO.monto_pagado)` con `fecha_pago` dentro del período.
+- **Exigible:** `SUM(TABLA_COBRANZA.monto)` de las cuotas que vencen en el
+  período y no después de hoy; **pagado del exigible** = lo pagado de esas
+  cuotas (tope: su monto).
+- **Efectividad:** pagado del exigible / exigible (sin dato si el exigible es 0).
+- **Por cobrar (a hoy):** saldo de cuotas `PENDIENTE|VENCIDO` que vencen desde hoy.
+- **Mora (a hoy):** saldo de cuotas `PENDIENTE|VENCIDO` con vencimiento anterior
+  a hoy, y número de pólizas con saldo vencido.
+- **Antigüedad de la mora:** ese saldo por días de atraso en tramos 1–30,
+  31–60, 61–90 y más de 90 (monto, cuotas y pólizas).
+- **Cobranza por canal:** exigible, pagado, efectividad, mora y pólizas en mora
+  de cada canal; solo se muestra con "Todos los canales".
+
+### Pagos de la aseguradora y conciliación
+
+La aseguradora (`ADMIN_ASEGURADORA`) consulta en **Pagos** los `PAGO` en estado
+`REGISTRADO` que notificaron sus canales: una fila por cuota pagada.
+
+- **Alcance:** igual que el Resumen de la aseguradora (regla 15): solo su
+  aseguradora; Canal (todos o uno activo) → Productos (todos o los activos del
+  canal elegido), por el canal dueño del producto (`PRODUCTO.canal_id`). Los ids
+  ajenos a la aseguradora se descartan.
+- **Fechas:** se filtra por `PAGO.fecha_pago` (por defecto, el mes en curso).
+  Filtros adicionales: estado de conciliación (todos, por conciliar,
+  conciliados) y método de pago.
+- **Conciliar** = la aseguradora confirma que recibió el pago: se guarda
+  `conciliado_en` y `conciliado_por_id`. Es una marca interna: no cambia montos,
+  `PAGO.estado`, el estado de la cuota ni nada que vea el canal o el cliente. Se
+  puede **quitar la conciliación** (vuelven a `NULL`) para corregir errores. Se
+  concilian pagos sueltos o todos los del filtro (con exclusiones); el servidor
+  vuelve a aplicar el alcance de la aseguradora y solo cambia los pagos que
+  están en el estado contrario. Cada cambio se audita (`AUDITORIA`, entidad
+  `PAGO`, acción `EDICION`, con `conciliado_en`/`conciliado_por_id` antes y
+  después).
+- **Excel:** exporta todos los pagos del filtro (sin paginar) con cliente,
+  póliza, vehículo, producto, canal, cuota, vencimiento, monto, método,
+  referencia, quién registró y la conciliación.
+
+### Pólizas emitidas y vencimientos (aseguradora)
+
+Mismo alcance que el Resumen de la aseguradora (regla 15: canal dueño del
+producto y productos activos validados).
+
+- **Pólizas emitidas:** filtra por `POLIZA.fecha_emision` (por defecto, el año
+  en curso), estado de la póliza y texto (cliente, cédula/RUC, placa, número de
+  póliza). El detalle muestra condiciones (coberturas y deducibles congelados
+  en la cotización) y las cuotas con sus pagos `REGISTRADO`; el Excel trae una
+  hoja de pólizas con sus condiciones y otra con cuotas y pagos.
+- **Vencimientos:** pólizas **no canceladas** (`VIGENTE` o `VENCIDA`) cuyo
+  `POLIZA.fecha_fin_vigencia` cae en el rango (por defecto, de hoy a 90 días;
+  un rango pasado muestra las que vencieron sin renovar). Días restantes =
+  fin de vigencia − hoy (`America/Guayaquil`); se marcan las pólizas con cuotas
+  vencidas sin pagar.
+
 ## 6. Roles y permisos (resumen para el backend)
 
 | Perfil | Puede |
 |---|---|
 | `ADMIN_PLATAFORMA` | Crear/editar aseguradoras, crear `ADMIN_ASEGURADORA`, ver todo el sistema |
-| `ADMIN_ASEGURADORA` | Configurar productos, canales, coberturas, cláusulas, tarifas/riesgos de **su** aseguradora; crear `USUARIO_CANAL` propios; ver cotizaciones/pólizas/cobranzas de su aseguradora |
+| `ADMIN_ASEGURADORA` | Configurar productos, canales, coberturas, cláusulas, tarifas/riesgos de **su** aseguradora; crear `USUARIO_CANAL` propios; ver cotizaciones/pólizas/cobranzas de su aseguradora; consultar, conciliar y exportar los pagos registrados por sus canales |
 | `USUARIO_CANAL` | Cotizar y gestionar clientes dentro de su canal/aseguradora asignada; corregir sus Órdenes de Emisión pendientes y regenerar/enviar su certificado; cancelar pólizas vigentes de su canal (individual o Excel); consultar y registrar pagos completos de cuotas de su canal desde Pagos |
 | `CLIENTE` | Registrarse, cotizar (autogestión), ver sus propias cotizaciones/pólizas/cobranzas, aceptar/rechazar cotizaciones |
 

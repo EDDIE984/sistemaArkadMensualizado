@@ -3,20 +3,24 @@ import Link from "next/link";
 import { Calculator, ChevronDown, FileText, ReceiptText, ScanSearch, Search, ShieldCheck, Table2, TriangleAlert } from "lucide-react";
 import { AdminPage, AdminPanel } from "@/components/admin/admin-ui";
 import { EmitPolicyForm } from "@/components/insurer/emit-policy-form";
+import { PendingEmissionFilters } from "@/components/insurer/pending-emission-filters";
 import { requireInsurerAdmin } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDbPool } from "@/lib/db/pool";
 import { isCarroceria, requiredSlots } from "@/lib/inspeccion/slots";
+import { resolveInsurerSummaryScope } from "@/lib/insurer/summary-scope";
 
-export const metadata: Metadata = { title: "Operación | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Pendientes de emisión | Kuantix", robots: { index: false, follow: false } };
 
 type PendingRow = {
   id: string;
   anios_vigencia: number;
   cuota_fija_mensual: string;
   fecha_inicio_vigencia: string | null;
+  creado_en: string;
   cliente: string;
   producto: string;
+  canal: string | null;
   puede_emitir: boolean;
   inspeccion_id: string | null;
   inspeccion_estado: string | null;
@@ -29,18 +33,36 @@ type PendingRow = {
 
 type Cuota = { poliza_id: string; numero_cuota: number; fecha_vencimiento: string; monto: string; estado: string };
 
-export default async function Operation({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+type SearchParams = { q?: string | string[]; canal?: string | string[]; producto?: string | string[]; desde?: string | string[]; hasta?: string | string[] };
+const first = (value: string | string[] | undefined) => typeof value === "string" ? value : undefined;
+const validDate = (value: string | undefined) => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value ? value : "";
+};
+
+export default async function Operation({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const session = await requireInsurerAdmin();
   const insurerId = session.insurerId!;
   const db = createAdminClient();
   const pool = getDbPool();
-  const { q = "" } = await searchParams;
-  const policySearch = q.trim();
+  const params = await searchParams;
+  const scopeData = await resolveInsurerSummaryScope(insurerId, { canal: params.canal, productos: params.producto });
+  const rawFrom = validDate(first(params.desde));
+  const rawTo = validDate(first(params.hasta));
+  const [from, to] = rawFrom && rawTo && rawFrom > rawTo ? [rawTo, rawFrom] : [rawFrom, rawTo];
+  const policySearch = (first(params.q) ?? "").trim();
+  const pendingParams = new URLSearchParams();
+  if (scopeData.selectedChannelId) pendingParams.set("canal", scopeData.selectedChannelId);
+  if (scopeData.selectedProductIds[0]) pendingParams.set("producto", scopeData.selectedProductIds[0]);
+  if (from) pendingParams.set("desde", from);
+  if (to) pendingParams.set("hasta", to);
+  const pendingHref = `/aseguradora/operacion${pendingParams.size ? `?${pendingParams}` : ""}`;
 
   const [pending, quotes, policies, cobranzas] = await Promise.all([
     pool.query<PendingRow>(
       `select c.id, c.anios_vigencia, c.cuota_fija_mensual::text, c.fecha_inicio_vigencia::text as fecha_inicio_vigencia,
-              cl.nombre_razon_social as cliente, p.nombre as producto,
+              c.creado_en::text as creado_en, cl.nombre_razon_social as cliente, p.nombre as producto, ch.nombre as canal,
               (
                 c.comision_canal_pct is not null
                 and (select count(*) from amortizacion_mensual am where am.cotizacion_id = c.id) = c.anios_vigencia * 12
@@ -60,11 +82,16 @@ export default async function Operation({ searchParams }: { searchParams: Promis
        from cotizacion c
        join cliente cl on cl.id = c.cliente_id
        join producto p on p.id = c.producto_id
+       left join canal ch on ch.id = p.canal_id
        left join inspeccion i on i.cotizacion_id = c.id
        where c.aseguradora_id = $1 and c.estado = 'PENDIENTE'
+         and ($2::uuid is null or p.canal_id = $2)
+         and (cardinality($3::uuid[]) = 0 or c.producto_id = any($3::uuid[]))
+         and ($4::date is null or (c.creado_en at time zone 'America/Guayaquil')::date >= $4::date)
+         and ($5::date is null or (c.creado_en at time zone 'America/Guayaquil')::date <= $5::date)
        order by c.creado_en desc
        limit 100`,
-      [insurerId],
+      [scopeData.scope.insurerId, scopeData.scope.channelId, scopeData.scope.productIds, from || null, to || null],
     ),
     db.from("cotizacion").select("id,creado_en,estado,cuota_fija_mensual,anios_vigencia,cliente(nombre_razon_social,identificacion),producto(nombre)").eq("aseguradora_id", insurerId).order("creado_en", { ascending: false }).limit(200),
     db.from("poliza").select("id,numero_poliza,fecha_emision,fecha_inicio_vigencia,fecha_fin_vigencia,estado,cotizacion!inner(id,aseguradora_id,cuota_fija_mensual,cliente(nombre_razon_social,identificacion),producto(nombre),vehiculo(placa))").eq("cotizacion.aseguradora_id", insurerId).order("fecha_emision", { ascending: false }).limit(200),
@@ -98,7 +125,7 @@ export default async function Operation({ searchParams }: { searchParams: Promis
   const montoPorCobrar = porCobrar.reduce((sum, c) => sum + Number(c.monto), 0);
 
   return (
-    <AdminPage eyebrow="Seguimiento" title="Operación" description="Emite pólizas, revisa el cronograma de cobranza y consulta la producción de tu aseguradora.">
+    <AdminPage eyebrow="Seguimiento" title="Pendientes de emisión" description="Revisa las cotizaciones listas para emitir y genera sus pólizas.">
       <section className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat icon={<ShieldCheck />} label="Pendientes de emisión" value={String(pendingRows.length)} />
         <Stat icon={<FileText />} label="Pólizas vigentes" value={String(vigentes)} detail={`${policyRows.length} emitidas`} />
@@ -107,15 +134,17 @@ export default async function Operation({ searchParams }: { searchParams: Promis
       </section>
 
       <div className="mt-4 grid gap-4">
-        <AdminPanel title={`Emitir pólizas (${pendingRows.length})`} description="Ingresa el número de póliza para emitir y generar el cronograma de cobranza" open>
+        <AdminPanel title={`Pendientes de emisión (${pendingRows.length})`} description="Filtra órdenes por canal, producto o fecha antes de emitir y generar el cronograma de cobranza" open>
+          <PendingEmissionFilters channels={scopeData.channels} products={scopeData.products} selectedChannelId={scopeData.selectedChannelId} selectedProductId={scopeData.selectedProductIds[0] ?? null} from={from} to={to} />
           <div className="grid gap-3">
             {pendingRows.map((row) => (
               <article key={row.id} className="rounded-2xl border border-line bg-surface-muted p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="font-semibold">{row.cliente}</p>
-                    <p className="mt-0.5 text-xs text-ink-subtle">{row.producto}</p>
+                    <p className="mt-0.5 text-xs text-ink-subtle">{row.producto}{row.canal ? ` · ${row.canal}` : ""}</p>
                     <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-muted">
+                      <span>Creada {date(row.creado_en)}</span>
                       <span><b className="text-ink">{money(row.cuota_fija_mensual)}</b> / mes</span>
                       <span>{row.anios_vigencia * 12} cuotas</span>
                       {row.fecha_inicio_vigencia && <span>Inicio {date(row.fecha_inicio_vigencia)}</span>}
@@ -150,6 +179,10 @@ export default async function Operation({ searchParams }: { searchParams: Promis
 
         <AdminPanel title={`Pólizas emitidas (${policyRows.length}${policySearch ? ` de ${allPolicyRows.length}` : ""})`} description="Busca por cédula, nombre o placa; abre una póliza para ver su cronograma" open>
           <form className="mb-4 flex flex-col gap-3 sm:flex-row" role="search" aria-label="Buscar pólizas emitidas">
+            {scopeData.selectedChannelId && <input type="hidden" name="canal" value={scopeData.selectedChannelId} />}
+            {scopeData.selectedProductIds[0] && <input type="hidden" name="producto" value={scopeData.selectedProductIds[0]} />}
+            {from && <input type="hidden" name="desde" value={from} />}
+            {to && <input type="hidden" name="hasta" value={to} />}
             <label className="relative min-w-0 flex-1">
               <span className="sr-only">Cédula, nombre del cliente o placa</span>
               <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-ink-subtle" aria-hidden="true" />
@@ -162,7 +195,7 @@ export default async function Operation({ searchParams }: { searchParams: Promis
             </label>
             <div className="flex gap-2">
               <button className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-ink px-5 text-sm font-bold text-white sm:flex-none">Buscar</button>
-              {policySearch && <Link href="/aseguradora/operacion" className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-line px-5 text-sm font-bold text-ink/80 hover:bg-ink/5 sm:flex-none">Limpiar</Link>}
+              {policySearch && <Link href={pendingHref} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-line px-5 text-sm font-bold text-ink/80 hover:bg-ink/5 sm:flex-none">Limpiar</Link>}
             </div>
           </form>
           <div className="grid gap-2">

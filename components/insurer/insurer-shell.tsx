@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Boxes, ChartNoAxesCombined, ChevronLeft, ChevronRight, Files, FileStack, LogOut, Network, ScanSearch, Users } from "lucide-react";
+import { Boxes, CalendarClock, ChartNoAxesCombined, ChevronLeft, ChevronRight, CreditCard, FileCheck2, FileStack, LogOut, Network, ScanSearch, Users } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { MobileNavigationMenu } from "@/components/internal/mobile-navigation-menu";
 import { KuantixLogo, KuantixMark } from "@/components/brand/kuantix-logo";
@@ -10,11 +10,13 @@ import type { AppSession } from "@/lib/auth/session";
 
 const items = [
   { href: "/aseguradora", label: "Resumen", icon: ChartNoAxesCombined },
+  { href: "/aseguradora/pagos", label: "Pagos", icon: CreditCard },
   { href: "/aseguradora/canales", label: "Canales", icon: Network },
   { href: "/aseguradora/productos", label: "Productos", icon: Boxes },
   { href: "/aseguradora/agentes", label: "Usuarios de canal", icon: Users },
-  { href: "/aseguradora/cotizaciones", label: "Cotizaciones", icon: Files },
-  { href: "/aseguradora/operacion", label: "Operación", icon: FileStack },
+  { href: "/aseguradora/polizas", label: "Pólizas emitidas", icon: FileCheck2 },
+  { href: "/aseguradora/vencimientos", label: "Vencimientos", icon: CalendarClock },
+  { href: "/aseguradora/operacion", label: "Pendientes de emisión", icon: FileStack },
   { href: "/aseguradora/inspecciones", label: "Inspecciones", icon: ScanSearch },
 ];
 

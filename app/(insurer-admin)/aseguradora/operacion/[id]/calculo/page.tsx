@@ -69,13 +69,13 @@ export default async function CalculoDetalle({
 
   return (
     <AdminPage
-      eyebrow="Operación"
+      eyebrow="Pendientes de emisión"
       title="Detalle del cálculo"
       description="Amortización mensual completa: prima neta, comisión del canal, impuestos y nivelación de la cuota."
     >
       <div className="mt-2 flex flex-wrap items-center gap-4">
         <Link href="/aseguradora/operacion" className="inline-flex min-h-10 items-center gap-2 text-sm font-bold text-brand-text">
-          <ArrowLeft className="size-4" /> Volver a Operación
+          <ArrowLeft className="size-4" /> Volver a Pendientes de emisión
         </Link>
         {quote.estado === "PENDIENTE" && (
           <Link href={`/aseguradora/operacion/${id}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3.5 text-xs font-bold text-ink/80 hover:bg-ink/5">

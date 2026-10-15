@@ -1,67 +1,23 @@
 import ExcelJS from "exceljs";
 import { requireChannelUser } from "@/lib/auth/session";
 import { getExpiring, getProductionDetail, parseSummaryFilters } from "@/lib/channel/summary";
+import { addSheet } from "@/lib/reports/xlsx-sheet";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const NAVY = "FF173250";
-const TEAL = "FF02C7B3";
 const MONEY = '"$"#,##0.00';
 const DATE = "dd/mm/yyyy";
 
-type Col = { header: string; key: string; width: number; numFmt?: string; total?: boolean };
-
 const toDate = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00Z`) : null);
-
-function addSheet(wb: ExcelJS.Workbook, name: string, title: string, cols: Col[], rows: Record<string, unknown>[]) {
-  const ws = wb.addWorksheet(name, { views: [{ state: "frozen", ySplit: 3 }] });
-  ws.mergeCells(1, 1, 1, cols.length);
-  ws.getCell(1, 1).value = title;
-  ws.getCell(1, 1).font = { bold: true, size: 13, color: { argb: NAVY } };
-  ws.getRow(1).height = 22;
-  ws.columns = cols.map((c) => ({ key: c.key, width: c.width }));
-  const header = ws.getRow(3);
-  cols.forEach((c, i) => {
-    const cell = header.getCell(i + 1);
-    cell.value = c.header;
-    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: NAVY } };
-    cell.alignment = { vertical: "middle", wrapText: true };
-    cell.border = { bottom: { style: "medium", color: { argb: TEAL } } };
-  });
-  header.height = 28;
-  rows.forEach((r) => {
-    const row = ws.addRow(cols.map((c) => r[c.key] ?? null));
-    cols.forEach((c, i) => { if (c.numFmt) row.getCell(i + 1).numFmt = c.numFmt; });
-  });
-  if (rows.length) {
-    ws.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3 + rows.length, column: cols.length } };
-    if (cols.some((c) => c.total)) {
-      const total = ws.addRow(cols.map((c, i) => {
-        if (i === 0) return `Total (${rows.length})`;
-        if (!c.total) return null;
-        const letter = ws.getColumn(i + 1).letter;
-        return { formula: `SUBTOTAL(9,${letter}4:${letter}${3 + rows.length})` };
-      }));
-      total.font = { bold: true, color: { argb: NAVY } };
-      total.eachCell((cell, i) => {
-        cell.border = { top: { style: "thin", color: { argb: TEAL } } };
-        if (cols[i - 1].numFmt) cell.numFmt = cols[i - 1].numFmt!;
-      });
-    }
-  } else {
-    ws.getCell(4, 1).value = "Sin registros para el filtro seleccionado.";
-    ws.getCell(4, 1).font = { italic: true, color: { argb: "FF5B6B7F" } };
-  }
-}
 
 /** Excel del Resumen: producción del período por póliza (cuotas que vencen) + próximos a vencer. */
 export async function GET(request: Request) {
   const s = await requireChannelUser();
   const sp = Object.fromEntries(new URL(request.url).searchParams);
   const f = parseSummaryFilters(sp);
-  const [production, expiring] = await Promise.all([getProductionDetail(s.channelId!, f.period), getExpiring(s.channelId!, f.expiry)]);
+  const scope = { insurerId: null, channelId: s.channelId!, productIds: [] };
+  const [production, expiring] = await Promise.all([getProductionDetail(scope, f.period), getExpiring(scope, f.expiry)]);
   const fmt = (iso: string) => iso.split("-").reverse().join("/");
 
   const wb = new ExcelJS.Workbook();

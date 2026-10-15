@@ -57,7 +57,7 @@ export default async function RecalculateQuote({ params }: { params: Promise<{ i
   return (
     <main className="relative z-10 mx-auto w-full max-w-[1080px] px-4 py-8 sm:px-7 lg:px-10">
       <Link href="/aseguradora/operacion" className="inline-flex min-h-10 items-center gap-2 text-sm font-bold text-brand-text">
-        <ArrowLeft className="size-4" /> Volver a Operación
+        <ArrowLeft className="size-4" /> Volver a Pendientes de emisión
       </Link>
       <p className="mt-4 text-xs font-bold uppercase tracking-wider text-brand-text/80">Cotización pendiente</p>
       <h1 className="mt-2 text-4xl font-bold tracking-[-0.035em]">Editar y recalcular</h1>
