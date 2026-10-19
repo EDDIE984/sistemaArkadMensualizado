@@ -9,11 +9,13 @@ import { Bot, Headset, MessageCircle, Phone, Send, Sparkles, X } from "lucide-re
  */
 
 type Scope = "insurer" | "channel";
-type Message = { id: number; from: "bot" | "user"; text: string };
+type Message = { id: number; from: "bot" | "user"; text: string; support?: boolean };
 type Pos = { x: number; y: number };
 
 const SUPPORT_PHONE = "+593984035410";
 const SUPPORT_PHONE_LABEL = "+593 98 403 5410";
+const CALL_URL = `tel:${SUPPORT_PHONE}`;
+const WHATSAPP_URL = `https://wa.me/${SUPPORT_PHONE.slice(1)}?text=${encodeURIComponent("Hola, necesito ayuda urgente con la plataforma Kuantiq.")}`;
 const BUTTON = 56;
 const MARGIN = 16;
 const PANEL_W = 380;
@@ -118,7 +120,7 @@ export function SupportAssistant({ scope }: { scope: Scope }) {
     setTyping(true);
     const reply = answer(scope, q);
     window.setTimeout(() => {
-      setMessages((m) => [...m, { id: nextId.current++, from: "bot", text: reply }]);
+      setMessages((m) => [...m, { id: nextId.current++, from: "bot", text: reply, support: reply === FALLBACK }]);
       setTyping(false);
     }, Math.min(1200, 400 + reply.length * 3));
   };
@@ -141,15 +143,15 @@ export function SupportAssistant({ scope }: { scope: Scope }) {
       </header>
 
       <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
-        <p className="flex gap-2"><Headset className="mt-0.5 size-4 shrink-0" /><span>Si deseas comunicarte de manera <strong>urgente</strong> con soporte técnico, hazlo al <a href={`tel:${SUPPORT_PHONE}`} className="font-bold underline underline-offset-2">{SUPPORT_PHONE_LABEL}</a>.</span></p>
+        <p className="flex gap-2"><Headset className="mt-0.5 size-4 shrink-0" /><span>Si deseas comunicarte de manera <strong>urgente</strong> con soporte técnico, <a href={CALL_URL} className="font-bold underline underline-offset-2">llámanos</a> o <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="font-bold underline underline-offset-2">escríbenos por WhatsApp</a> al <a href={CALL_URL} className="font-bold underline underline-offset-2 whitespace-nowrap">{SUPPORT_PHONE_LABEL}</a>.</span></p>
         <div className="mt-2 flex gap-2 pl-6">
-          <a href={`tel:${SUPPORT_PHONE}`} className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-amber-300 bg-white px-3 font-bold hover:bg-amber-100"><Phone className="size-3.5" />Llamar</a>
-          <a href={`https://wa.me/${SUPPORT_PHONE.slice(1)}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-amber-300 bg-white px-3 font-bold hover:bg-amber-100"><MessageCircle className="size-3.5" />WhatsApp</a>
+          <a href={CALL_URL} className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-amber-300 bg-white px-3 font-bold hover:bg-amber-100"><Phone className="size-3.5" />Llamar</a>
+          <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[#25D366] px-3 font-bold text-white hover:bg-[#1ebe5a]"><MessageCircle className="size-3.5" />WhatsApp</a>
         </div>
       </div>
 
       <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-surface-muted px-4 py-4">
-        {messages.map((m) => <div key={m.id} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}><p className={`max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-5 ${m.from === "user" ? "rounded-br-md bg-brand text-ink-strong" : "rounded-bl-md border border-line bg-white"}`}>{m.text}</p></div>)}
+        {messages.map((m) => <div key={m.id} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}><p className={`max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-5 ${m.from === "user" ? "rounded-br-md bg-brand text-ink-strong" : "rounded-bl-md border border-line bg-white"}`}>{m.text}{m.support && <span className="mt-2.5 flex flex-wrap gap-2"><a href={CALL_URL} className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-line px-3 text-xs font-bold hover:bg-ink/5"><Phone className="size-3.5" />Llamar</a><a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[#25D366] px-3 text-xs font-bold text-white hover:bg-[#1ebe5a]"><MessageCircle className="size-3.5" />Escribir por WhatsApp</a></span>}</p></div>)}
         {typing && <div className="flex"><p className="flex items-center gap-1 rounded-2xl rounded-bl-md border border-line bg-white px-3.5 py-3" aria-label="El asistente está escribiendo">{[0, 150, 300].map((d) => <span key={d} className="size-1.5 animate-bounce rounded-full bg-ink-subtle" style={{ animationDelay: `${d}ms` }} />)}</p></div>}
         <div className="pt-1">
           <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Preguntas frecuentes</p>
