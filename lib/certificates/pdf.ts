@@ -34,7 +34,7 @@ export async function renderCertificatePdf(data: CertificateData, opts: { previe
   const page = doc.addPage([W, H]);
   const regular = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  logoBytes ??= readFile(path.join(process.cwd(), "public/images/logo-kuantix.png"));
+  logoBytes ??= readFile(path.join(process.cwd(), "public/images/logo-kuantiq.png"));
   const logo = await doc.embedPng(await logoBytes);
 
   const text = (p: PDFPage, s: string, x: number, y: number, size: number, font: PDFFont, color = NAVY) => p.drawText(s, { x, y, size, font, color });
