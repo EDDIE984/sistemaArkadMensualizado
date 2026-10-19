@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Headset, MessageCircle, Phone, Send, Sparkles, X } from "lucide-react";
+import { Bot, ChevronDown, ChevronUp, Headset, MessageCircle, Phone, Send, Sparkles, X } from "lucide-react";
 
 /**
  * Asistente de soporte flotante. El botón se puede arrastrar a cualquier parte de la
@@ -44,6 +44,8 @@ export function SupportAssistant({ scope }: { scope: Scope }) {
   const [messages, setMessages] = useState<Message[]>([{ id: 0, from: "bot", text: "¡Hola! Soy el asistente de soporte de Kuantiq. Te explico cómo usar el sistema: elige una pregunta frecuente o escríbeme tu consulta.", local: true }]);
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState("");
+  // Las preguntas frecuentes se muestran al inicio y se contraen al empezar a chatear.
+  const [faqOpen, setFaqOpen] = useState(true);
   const drag = useRef<{ dx: number; dy: number; sx: number; sy: number; moved: boolean; last?: Pos } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
@@ -107,6 +109,7 @@ export function SupportAssistant({ scope }: { scope: Scope }) {
     setMessages((m) => [...m, userMsg]);
     setDraft("");
     setTyping(true);
+    setFaqOpen(false);
     let reply: Message;
     try {
       const res = await fetch("/api/soporte/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: history }) });
@@ -149,10 +152,11 @@ export function SupportAssistant({ scope }: { scope: Scope }) {
       <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-surface-muted px-4 py-4">
         {messages.map((m) => <div key={m.id} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}><p className={`max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-5 ${m.from === "user" ? "rounded-br-md bg-brand text-ink-strong" : "rounded-bl-md border border-line bg-white"}`}>{m.from === "bot" ? renderText(m.text) : m.text}{m.support && <span className="mt-2.5 flex flex-wrap gap-2"><a href={CALL_URL} className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-line px-3 text-xs font-bold hover:bg-ink/5"><Phone className="size-3.5" />Llamar</a><a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[#25D366] px-3 text-xs font-bold text-white hover:bg-[#1ebe5a]"><MessageCircle className="size-3.5" />Escribir por WhatsApp</a></span>}</p></div>)}
         {typing && <div className="flex"><p className="flex items-center gap-1 rounded-2xl rounded-bl-md border border-line bg-white px-3.5 py-3" aria-label="El asistente está escribiendo">{[0, 150, 300].map((d) => <span key={d} className="size-1.5 animate-bounce rounded-full bg-ink-subtle" style={{ animationDelay: `${d}ms` }} />)}</p></div>}
-        <div className="pt-1">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Preguntas frecuentes</p>
-          <div className="flex flex-wrap gap-2">{FAQ[scope].map((q) => <button key={q} type="button" disabled={typing} onClick={() => ask(q)} className="rounded-full border border-brand/30 bg-white px-3 py-1.5 text-left text-xs font-semibold text-brand-text hover:bg-brand/10 disabled:opacity-50">{q}</button>)}</div>
-        </div>
+      </div>
+
+      <div className="border-t border-line bg-white">
+        <button type="button" onClick={() => setFaqOpen((o) => !o)} aria-expanded={faqOpen} aria-controls="support-faq" className="flex min-h-9 w-full items-center justify-between px-4 text-[10px] font-bold uppercase tracking-wider text-ink-subtle hover:text-ink">Preguntas frecuentes{faqOpen ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}</button>
+        {faqOpen && <div id="support-faq" className="flex max-h-32 flex-wrap gap-2 overflow-y-auto px-3 pb-3">{FAQ[scope].map((q) => <button key={q} type="button" disabled={typing} onClick={() => ask(q)} className="rounded-full border border-brand/30 bg-white px-3 py-1.5 text-left text-xs font-semibold text-brand-text hover:bg-brand/10 disabled:opacity-50">{q}</button>)}</div>}
       </div>
 
       <form onSubmit={(e) => { e.preventDefault(); ask(draft); }} className="flex items-center gap-2 border-t border-line bg-white px-3 py-3">
