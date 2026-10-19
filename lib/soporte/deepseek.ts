@@ -3,7 +3,7 @@ import "server-only";
 import OpenAI from "openai";
 
 /** DeepSeek expone una API compatible con OpenAI, así que reutilizamos su SDK. */
-export const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+export const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-flash";
 
 export class DeepSeekConfigError extends Error {}
 

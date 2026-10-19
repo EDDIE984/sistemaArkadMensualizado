@@ -1,3 +1,4 @@
+import type OpenAI from "openai";
 import { z } from "zod";
 import { getSession } from "@/lib/auth/session";
 import { DEEPSEEK_MODEL, DeepSeekConfigError, deepseek } from "@/lib/soporte/deepseek";
@@ -62,7 +63,9 @@ export async function POST(request: Request): Promise<Response> {
       temperature: 0.3,
       max_tokens: 600,
       messages: [{ role: "system", content: buildSystemPrompt(role) }, ...history],
-    });
+      // deepseek-flash razona por defecto; para soporte basta la respuesta directa (más rápida y barata).
+      thinking: { type: "disabled" },
+    } as OpenAI.ChatCompletionCreateParamsNonStreaming);
     const reply = completion.choices[0]?.message?.content?.trim();
     if (!reply) return json({ error: "El asistente no devolvió respuesta." }, 502);
     return json({ reply }, 200);

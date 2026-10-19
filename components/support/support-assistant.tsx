@@ -28,6 +28,11 @@ const FAQ: Record<Scope, string[]> = {
 
 const ERROR_TEXT = `No pude responder en este momento. Inténtalo de nuevo en unos minutos; si es urgente, comunícate con soporte técnico al ${SUPPORT_PHONE_LABEL}.`;
 
+/** Muestra el texto del bot respetando **negritas**; el resto se renderiza como texto plano. */
+function renderText(text: string) {
+  return text.split(/(\*\*[^*\n]+\*\*)/g).map((part, i) => (part.startsWith("**") && part.endsWith("**") && part.length > 4 ? <strong key={i}>{part.slice(2, -2)}</strong> : part));
+}
+
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), Math.max(min, max));
 const clampPos = (p: Pos): Pos => ({ x: clamp(p.x, MARGIN, window.innerWidth - BUTTON - MARGIN), y: clamp(p.y, MARGIN, window.innerHeight - BUTTON - MARGIN) });
 
@@ -142,7 +147,7 @@ export function SupportAssistant({ scope }: { scope: Scope }) {
       </div>
 
       <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-surface-muted px-4 py-4">
-        {messages.map((m) => <div key={m.id} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}><p className={`max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-5 ${m.from === "user" ? "rounded-br-md bg-brand text-ink-strong" : "rounded-bl-md border border-line bg-white"}`}>{m.text}{m.support && <span className="mt-2.5 flex flex-wrap gap-2"><a href={CALL_URL} className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-line px-3 text-xs font-bold hover:bg-ink/5"><Phone className="size-3.5" />Llamar</a><a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[#25D366] px-3 text-xs font-bold text-white hover:bg-[#1ebe5a]"><MessageCircle className="size-3.5" />Escribir por WhatsApp</a></span>}</p></div>)}
+        {messages.map((m) => <div key={m.id} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}><p className={`max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm leading-5 ${m.from === "user" ? "rounded-br-md bg-brand text-ink-strong" : "rounded-bl-md border border-line bg-white"}`}>{m.from === "bot" ? renderText(m.text) : m.text}{m.support && <span className="mt-2.5 flex flex-wrap gap-2"><a href={CALL_URL} className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-line px-3 text-xs font-bold hover:bg-ink/5"><Phone className="size-3.5" />Llamar</a><a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[#25D366] px-3 text-xs font-bold text-white hover:bg-[#1ebe5a]"><MessageCircle className="size-3.5" />Escribir por WhatsApp</a></span>}</p></div>)}
         {typing && <div className="flex"><p className="flex items-center gap-1 rounded-2xl rounded-bl-md border border-line bg-white px-3.5 py-3" aria-label="El asistente está escribiendo">{[0, 150, 300].map((d) => <span key={d} className="size-1.5 animate-bounce rounded-full bg-ink-subtle" style={{ animationDelay: `${d}ms` }} />)}</p></div>}
         <div className="pt-1">
           <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Preguntas frecuentes</p>
