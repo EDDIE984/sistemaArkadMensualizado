@@ -6,6 +6,7 @@ import { Boxes, CalendarClock, ChartNoAxesCombined, ChevronLeft, ChevronRight, C
 import { logout } from "@/app/actions/auth";
 import { MobileNavigationMenu } from "@/components/internal/mobile-navigation-menu";
 import { KuantixLogo, KuantixMark } from "@/components/brand/kuantix-logo";
+import { SupportAssistant } from "@/components/support/support-assistant";
 import type { AppSession } from "@/lib/auth/session";
 
 const items = [
@@ -38,5 +39,6 @@ export function InsurerShell({ session, insurerName, children }: { session: AppS
       </aside>
       <div className="min-w-0 overflow-x-clip"><header className="sticky top-0 z-30 hidden min-h-16 items-center justify-between border-b border-line bg-white/85 px-6 backdrop-blur-xl lg:flex"><div className="min-w-0"><p className="truncate text-sm font-bold">{insurerName}</p><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-subtle">Panel de aseguradora</p></div><form action={logout}><button className="flex min-h-10 items-center gap-2 rounded-full border border-line bg-surface-muted px-4 text-xs font-bold text-ink/80 transition-colors hover:bg-ink/5 hover:text-ink"><LogOut className="size-4"/>Cerrar sesión</button></form></header>{children}</div>
     </div>
+    <SupportAssistant scope="insurer" />
   </div>;
 }
