@@ -4,12 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot, Headset, MessageCircle, Phone, Send, Sparkles, X } from "lucide-react";
 
 /**
- * Asistente de soporte flotante (MOCKUP). El botón se puede arrastrar a cualquier
- * parte de la pantalla y abre un chat con respuestas simuladas; no hay backend ni IA real.
+ * Asistente de soporte flotante. El botón se puede arrastrar a cualquier parte de la
+ * pantalla y abre un chat atendido por IA (/api/soporte/chat) que solo explica el uso del sistema.
  */
 
 type Scope = "insurer" | "channel";
-type Message = { id: number; from: "bot" | "user"; text: string; support?: boolean };
+type Message = { id: number; from: "bot" | "user"; text: string; support?: boolean; local?: boolean };
 type Pos = { x: number; y: number };
 
 const SUPPORT_PHONE = "+593984035410";
@@ -21,41 +21,22 @@ const MARGIN = 16;
 const PANEL_W = 380;
 const PANEL_H = 560;
 
-const FAQ: Record<Scope, { q: string; keys: string[]; a: string }[]> = {
-  insurer: [
-    { q: "¿Cómo creo un producto?", keys: ["producto", "parametriz"], a: "Ve a Productos y pulsa «Nuevo producto». Define nombre, ramo y vigencia; luego entra al detalle para parametrizar coberturas, deducibles y tarifas. El producto solo se ofrece a los canales cuando está activo." },
-    { q: "¿Cómo apruebo una inspección?", keys: ["inspecci", "foto", "daño"], a: "En Inspecciones abre la solicitud pendiente. Verás las fotos por posición y el análisis de daños de la IA. Puedes ajustar los hallazgos del técnico y luego pulsar «Aprobar» o «Rechazar» indicando el motivo." },
-    { q: "¿Cómo emito una póliza pendiente?", keys: ["emit", "emisión", "pendiente", "póliza", "poliza"], a: "En Pendientes de emisión elige la cotización. Revisa el detalle del cálculo; si hace falta, recalcula la prima. Al confirmar, la póliza pasa a Pólizas emitidas y el canal recibe el certificado." },
-    { q: "¿Cómo descargo el reporte de pagos?", keys: ["pago", "reporte", "excel", "descarg"], a: "En Pagos filtra por período y canal, y pulsa «Descargar Excel». El archivo incluye las cuotas cobradas, la prima neta y la comisión por canal." },
-    { q: "¿Cómo creo un usuario de canal?", keys: ["usuario", "agente", "credencial", "contraseña"], a: "En Usuarios de canal abre «Nuevo usuario», asígnalo a uno de tus canales y define una contraseña temporal de al menos 10 caracteres. Puedes desactivarlo cuando quieras." },
-  ],
-  channel: [
-    { q: "¿Cómo creo una orden de emisión?", keys: ["orden", "emisión", "cotiz", "nueva"], a: "En Órdenes de Emisión pulsa «Nueva». Ingresa los datos del cliente y del vehículo, elige el plan y envía la orden. La aseguradora la revisa y emite la póliza." },
-    { q: "¿Cómo cancelo un certificado?", keys: ["cancel", "anular", "certificado"], a: "En Cancelaciones → Individual busca el certificado por número o cliente, indica el motivo y la fecha efectiva. El sistema calcula la nivelación de las cuotas antes de confirmar." },
-    { q: "¿Qué es la carga masiva de cancelaciones?", keys: ["masiva", "excel", "carga", "archivo"], a: "Permite cancelar varios certificados a la vez subiendo un Excel con la plantilla del sistema. Antes de aplicar los cambios verás una validación fila por fila." },
-    { q: "¿Dónde veo mis pagos?", keys: ["pago", "cuota", "cobro"], a: "En Pagos tienes las cuotas por período con su estado (pagada, pendiente, vencida) y los totales del mes." },
-    { q: "¿Cómo uso la calculadora Tradicional?", keys: ["tradicional", "calculadora", "anual"], a: "En Tradicional ingresa el valor asegurado y las características del vehículo para estimar la prima anual de un seguro tradicional y compararla con el plan mensual." },
-  ],
+const FAQ: Record<Scope, string[]> = {
+  insurer: ["¿Cómo creo un producto?", "¿Cómo apruebo una inspección?", "¿Cómo emito una póliza pendiente?", "¿Cómo concilio los pagos?", "¿Cómo creo un usuario de canal?"],
+  channel: ["¿Cómo creo una orden de emisión?", "¿Cómo cancelo una póliza?", "¿Cómo funciona la carga masiva?", "¿Cómo registro un pago?", "¿Cómo reenvío un certificado?"],
 };
 
-const FALLBACK = `Todavía estoy aprendiendo sobre ese tema 🤖. Pronto podré ayudarte con más consultas. Si es urgente, comunícate con soporte técnico al ${SUPPORT_PHONE_LABEL}.`;
+const ERROR_TEXT = `No pude responder en este momento. Inténtalo de nuevo en unos minutos; si es urgente, comunícate con soporte técnico al ${SUPPORT_PHONE_LABEL}.`;
 
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), Math.max(min, max));
 const clampPos = (p: Pos): Pos => ({ x: clamp(p.x, MARGIN, window.innerWidth - BUTTON - MARGIN), y: clamp(p.y, MARGIN, window.innerHeight - BUTTON - MARGIN) });
-const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-
-function answer(scope: Scope, text: string) {
-  const t = normalize(text);
-  const hit = FAQ[scope].find((f) => normalize(f.q) === t) ?? FAQ[scope].find((f) => f.keys.some((k) => t.includes(normalize(k))));
-  return hit?.a ?? FALLBACK;
-}
 
 export function SupportAssistant({ scope }: { scope: Scope }) {
   const storageKey = `kuantiq:support-pos:${scope}`;
   const [pos, setPos] = useState<Pos | null>(null);
   const [open, setOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([{ id: 0, from: "bot", text: "¡Hola! Soy el asistente de Kuantiq. Elige una pregunta frecuente o escríbeme tu consulta." }]);
+  const [messages, setMessages] = useState<Message[]>([{ id: 0, from: "bot", text: "¡Hola! Soy el asistente de soporte de Kuantiq. Te explico cómo usar el sistema: elige una pregunta frecuente o escríbeme tu consulta.", local: true }]);
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState("");
   const drag = useRef<{ dx: number; dy: number; sx: number; sy: number; moved: boolean; last?: Pos } | null>(null);
@@ -112,17 +93,27 @@ export function SupportAssistant({ scope }: { scope: Scope }) {
     else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((o) => !o); }
   };
 
-  const ask = (text: string) => {
-    const q = text.trim();
+  const ask = async (text: string) => {
+    const q = text.trim().slice(0, 1000);
     if (!q || typing) return;
-    setMessages((m) => [...m, { id: nextId.current++, from: "user", text: q }]);
+    const userMsg: Message = { id: nextId.current++, from: "user", text: q };
+    // Al modelo solo va la conversación real: sin el saludo ni los avisos de error locales.
+    const history = [...messages, userMsg].filter((m) => !m.local).map((m) => ({ role: m.from === "user" ? "user" : "assistant", content: m.text }));
+    setMessages((m) => [...m, userMsg]);
     setDraft("");
     setTyping(true);
-    const reply = answer(scope, q);
-    window.setTimeout(() => {
-      setMessages((m) => [...m, { id: nextId.current++, from: "bot", text: reply, support: reply === FALLBACK }]);
-      setTyping(false);
-    }, Math.min(1200, 400 + reply.length * 3));
+    let reply: Message;
+    try {
+      const res = await fetch("/api/soporte/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: history }) });
+      const data = (await res.json().catch(() => ({}))) as { reply?: string; error?: string };
+      reply = res.ok && data.reply
+        ? { id: nextId.current++, from: "bot", text: data.reply }
+        : { id: nextId.current++, from: "bot", text: res.status === 429 && data.error ? data.error : ERROR_TEXT, support: true, local: true };
+    } catch {
+      reply = { id: nextId.current++, from: "bot", text: ERROR_TEXT, support: true, local: true };
+    }
+    setMessages((m) => [...m, reply]);
+    setTyping(false);
   };
 
   if (!pos) return null;
@@ -155,15 +146,15 @@ export function SupportAssistant({ scope }: { scope: Scope }) {
         {typing && <div className="flex"><p className="flex items-center gap-1 rounded-2xl rounded-bl-md border border-line bg-white px-3.5 py-3" aria-label="El asistente está escribiendo">{[0, 150, 300].map((d) => <span key={d} className="size-1.5 animate-bounce rounded-full bg-ink-subtle" style={{ animationDelay: `${d}ms` }} />)}</p></div>}
         <div className="pt-1">
           <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-ink-subtle">Preguntas frecuentes</p>
-          <div className="flex flex-wrap gap-2">{FAQ[scope].map((f) => <button key={f.q} type="button" disabled={typing} onClick={() => ask(f.q)} className="rounded-full border border-brand/30 bg-white px-3 py-1.5 text-left text-xs font-semibold text-brand-text hover:bg-brand/10 disabled:opacity-50">{f.q}</button>)}</div>
+          <div className="flex flex-wrap gap-2">{FAQ[scope].map((q) => <button key={q} type="button" disabled={typing} onClick={() => ask(q)} className="rounded-full border border-brand/30 bg-white px-3 py-1.5 text-left text-xs font-semibold text-brand-text hover:bg-brand/10 disabled:opacity-50">{q}</button>)}</div>
         </div>
       </div>
 
       <form onSubmit={(e) => { e.preventDefault(); ask(draft); }} className="flex items-center gap-2 border-t border-line bg-white px-3 py-3">
-        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Escribe tu consulta…" aria-label="Escribe tu consulta" className="min-h-10 flex-1 rounded-full border border-line bg-surface-muted px-4 text-sm outline-none focus:border-brand" />
+        <input value={draft} maxLength={1000} onChange={(e) => setDraft(e.target.value)} placeholder="Escribe tu consulta…" aria-label="Escribe tu consulta" className="min-h-10 flex-1 rounded-full border border-line bg-surface-muted px-4 text-sm outline-none focus:border-brand" />
         <button type="submit" disabled={!draft.trim() || typing} className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand text-ink-strong hover:bg-brand-strong disabled:opacity-40" aria-label="Enviar"><Send className="size-4" /></button>
       </form>
-      <p className="bg-white pb-2 text-center text-[10px] text-ink-subtle">Mockup · Las respuestas son de demostración</p>
+      <p className="bg-white pb-2 text-center text-[10px] text-ink-subtle">Respuestas generadas por IA · pueden contener errores</p>
     </section>}
 
     <button
