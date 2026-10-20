@@ -1358,6 +1358,14 @@ producto y productos activos validados).
 | `USUARIO_CANAL` | Cotizar y gestionar clientes dentro de su canal/aseguradora asignada; corregir sus Órdenes de Emisión pendientes y regenerar/enviar su certificado; cancelar pólizas vigentes de su canal (individual o Excel); consultar y registrar pagos completos de cuotas de su canal desde Pagos |
 | `CLIENTE` | Registrarse, cotizar (autogestión), ver sus propias cotizaciones/pólizas/cobranzas, aceptar/rechazar cotizaciones |
 
+**Acceso a la base de datos (regla general):** estos permisos se aplican en el
+servidor (Server Actions, Route Handlers) con sesión propia; la base **no** se
+expone a la API pública de Supabase. Por eso **todas** las tablas de `public`
+llevan RLS activado **sin políticas** + `revoke all` a `anon, authenticated`,
+y sólo las tocan `service_role` (cliente admin) y la conexión directa de
+Postgres, que no están sujetas a RLS. Toda tabla nueva debe crearse con ese
+mismo patrón; no existe cliente Supabase con la anon key en la aplicación.
+
 ### 6.1 Alcance del panel `ADMIN_PLATAFORMA`
 
 El panel de plataforma tiene navegación propia y separada de `CLIENTE`. Sus
