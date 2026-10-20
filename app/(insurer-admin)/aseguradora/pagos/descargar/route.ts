@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   const rows = await getAllInsurerPayments({ ...scope, insurerId: session.insurerId! }, f);
 
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Kuantix";
+  workbook.creator = "Kuantiq";
   workbook.created = new Date();
   addSheet(workbook, "Pagos", `Pagos registrados por los canales · ${dateLabel(f.from)} – ${dateLabel(f.to)}`, [
     { header: "Fecha de pago", key: "paidOn", width: 13, numFmt: DATE },

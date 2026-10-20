@@ -11,7 +11,7 @@ import { PAYMENT_METHODS, RECONCILIATION_OPTIONS, insurerPaymentFiltersSchema, p
 import { getInsurerPayments } from "@/lib/insurer/payments";
 import { resolveInsurerSummaryScope } from "@/lib/insurer/summary-scope";
 
-export const metadata: Metadata = { title: "Pagos | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Pagos | Kuantiq", robots: { index: false, follow: false } };
 
 const PAGE_SIZE = 50;
 const label = "text-[10px] font-bold uppercase tracking-wider text-ink-subtle";

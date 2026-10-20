@@ -29,7 +29,7 @@ let logoBytes: Promise<Buffer> | null = null;
 export async function renderCertificatePdf(data: CertificateData, opts: { preview?: boolean } = {}) {
   const doc = await PDFDocument.create();
   doc.setTitle(`Certificado de cobertura ${data.number}`);
-  doc.setAuthor("Kuantix");
+  doc.setAuthor("Kuantiq");
   doc.setSubject(`${data.product} · ${data.insurer}`);
   const page = doc.addPage([W, H]);
   const regular = await doc.embedFont(StandardFonts.Helvetica);
@@ -152,7 +152,7 @@ export async function renderCertificatePdf(data: CertificateData, opts: { previe
   ];
   notes.forEach((n, i) => text(page, n, M, M + 30 - i * 11, 7.5, regular, SUBTLE));
   page.drawLine({ start: { x: M, y: M + 44 }, end: { x: W - M, y: M + 44 }, thickness: 0.6, color: LINE });
-  const brand = "Kuantix · Tecnología confiable";
+  const brand = "Kuantiq · Tecnología confiable";
   text(page, brand, W - M - bold.widthOfTextAtSize(brand, 7.5), M - 6, 7.5, bold, TEAL_TEXT);
   text(page, opts.preview ? "Vista previa" : `Nº ${data.number}`, M, M - 6, 7.5, regular, SUBTLE);
 

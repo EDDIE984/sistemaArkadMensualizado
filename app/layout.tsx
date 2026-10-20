@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Kuantix",
-  description: "Kuantix",
+  title: "Kuantiq",
+  description: "Kuantiq",
 };
 
 export const viewport: Viewport = {

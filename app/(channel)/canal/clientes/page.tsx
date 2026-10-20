@@ -10,7 +10,7 @@ import { requireChannelUser } from "@/lib/auth/session";
 import { normalizeEcuadorPhone } from "@/lib/certificates/send";
 import { ORDER_SEARCH_LIMIT, searchRegisteredOrders, type ChannelOrderResult } from "@/lib/channel/order-search";
 
-export const metadata: Metadata = { title: "Clientes del canal | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Clientes del canal | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const s = await requireChannelUser();

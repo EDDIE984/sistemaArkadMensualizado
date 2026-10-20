@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { loadInspeccionForCotizacion } from "@/lib/inspeccion/data";
 import { InspeccionWorkspace } from "@/components/inspeccion/inspeccion-workspace";
 
-export const metadata: Metadata = { title: "Inspección | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Inspección | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function InspeccionPage({ params }: PageProps<"/mi-cuenta/cotizaciones/[id]/inspeccion">) {
   const session = await requireSession();

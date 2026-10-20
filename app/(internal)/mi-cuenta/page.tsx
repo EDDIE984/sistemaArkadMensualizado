@@ -4,7 +4,7 @@ import { ArrowRight, CarFront, FileText, UserRound } from "lucide-react";
 import { requireSession } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const metadata: Metadata = { title: "Mi cuenta | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Mi cuenta | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function AccountPage() {
   const session = await requireSession();

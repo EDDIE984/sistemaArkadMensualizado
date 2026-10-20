@@ -67,7 +67,7 @@ export async function sendCertificateEmail(to: string, data: CertificateData, pd
       html: `
         <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#173250">
           <div style="border-bottom:3px solid #02c7b3;padding:20px 0 14px">
-            <p style="margin:0;font-size:12px;letter-spacing:.16em;color:#00897b;font-weight:bold">KUANTIX · CERTIFICADO DE COBERTURA</p>
+            <p style="margin:0;font-size:12px;letter-spacing:.16em;color:#00897b;font-weight:bold">KUANTIQ · CERTIFICADO DE COBERTURA</p>
           </div>
           <h1 style="font-size:22px;margin:22px 0 8px">Hola ${escape(firstName(data.client.name))},</h1>
           <p style="font-size:15px;line-height:1.6;color:#5b6b7f;margin:0 0 16px">

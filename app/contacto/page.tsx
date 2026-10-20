@@ -3,9 +3,9 @@ import { Clock3, Mail, MapPin, Phone } from "lucide-react";
 import { SiteNav } from "@/components/site-nav";
 
 export const metadata: Metadata = {
-  title: "Contacto | Kuantix",
+  title: "Contacto | Kuantiq",
   description:
-    "Comunícate con Kuantix para recibir información sobre seguros vehiculares, planes mensuales y alternativas de protección.",
+    "Comunícate con Kuantiq para recibir información sobre seguros vehiculares, planes mensuales y alternativas de protección.",
 };
 
 const contactItems = [

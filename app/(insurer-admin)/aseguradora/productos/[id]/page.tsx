@@ -5,7 +5,7 @@ import { AnnualRateForm, DepreciationForm, MonthlyParametersForm, RiskModelForm,
 import { requireInsurerAdmin } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const metadata:Metadata={title:"Parametrización de producto | Kuantix",robots:{index:false,follow:false}};
+export const metadata:Metadata={title:"Parametrización de producto | Kuantiq",robots:{index:false,follow:false}};
 const depreciationTypes=["NUEVO_1ER_ANIO","NUEVO_DESDE_2DO","USADO_1ER_ANIO","USADO_DESDE_2DO"];
 const sectionLinks=[["#tasas","Tasas e impuestos"],["#depreciacion","Años y depreciación"],["#riesgos","Factores de riesgo"],["#tarifas","Matriz tarifaria"]] as const;
 

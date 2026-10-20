@@ -7,7 +7,7 @@ import { requireChannelUser } from "@/lib/auth/session";
 import { normalizeEcuadorPhone } from "@/lib/certificates/send";
 import { getOrderDetail } from "@/lib/policies/order-detail";
 
-export const metadata: Metadata = { title: "Detalle de la Orden de Emisión | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Detalle de la Orden de Emisión | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function Page({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ q?: string }> }) {
   const s = await requireChannelUser();

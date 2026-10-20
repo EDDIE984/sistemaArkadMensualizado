@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const rows = await getAllExpirations({ ...scope, insurerId: session.insurerId! }, filters);
 
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Kuantix";
+  workbook.creator = "Kuantiq";
   workbook.created = new Date();
   addSheet(workbook, "Vencimientos", `Pólizas que vencen entre ${dateLabel(filters.from)} y ${dateLabel(filters.to)}`, [
     { header: "Cliente", key: "client", width: 32 }, { header: "Cédula / RUC", key: "identification", width: 15 },

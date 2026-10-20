@@ -4,7 +4,7 @@ import { requireSession } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ProfileForm } from "@/components/internal/profile-form";
 
-export const metadata: Metadata = { title: "Mi perfil | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Mi perfil | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function ProfilePage({ searchParams }: PageProps<"/mi-cuenta/perfil">) {
   const session = await requireSession();

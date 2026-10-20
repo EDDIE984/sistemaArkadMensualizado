@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { KeyRound, Link2Off } from "lucide-react";
 import { ActivationForm } from "@/components/auth/activation-form";
-import { KuantixLogo } from "@/components/brand/kuantix-logo";
+import { KuantiqLogo } from "@/components/brand/kuantiq-logo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashOpaqueToken } from "@/lib/auth/crypto";
 
 export const metadata: Metadata = {
-  title: "Activar cuenta | Kuantix",
-  description: "Confirma tu correo y crea la contraseña de acceso a Kuantix.",
+  title: "Activar cuenta | Kuantiq",
+  description: "Confirma tu correo y crea la contraseña de acceso a Kuantiq.",
   robots: { index: false, follow: false },
 };
 
@@ -23,7 +23,7 @@ export default async function ActivationPage({ searchParams }: PageProps<"/activ
         <div className="flex size-14 items-center justify-center rounded-[18px] border border-brand/25 bg-brand/10 text-brand">
           {valid ? <KeyRound className="size-7" aria-hidden="true" /> : <Link2Off className="size-7" aria-hidden="true" />}
         </div>
-        <KuantixLogo className="mt-6 h-8 w-auto" />
+        <KuantiqLogo className="mt-6 h-8 w-auto" />
         <h1 className="mt-2 text-[32px] font-bold tracking-[-0.035em]">
           {valid ? "Crea tu contraseña" : "Enlace no disponible"}
         </h1>

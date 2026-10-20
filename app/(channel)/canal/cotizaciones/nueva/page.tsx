@@ -6,7 +6,7 @@ import { requireChannelUser } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getQuoteFormData } from "@/lib/quotes/data";
 
-export const metadata: Metadata = { title: "Nueva Orden de Emisión asistida | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Nueva Orden de Emisión asistida | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ cliente?: string; incompleto?: string }> }) {
   const s = await requireChannelUser();

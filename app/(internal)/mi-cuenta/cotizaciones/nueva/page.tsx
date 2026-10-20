@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getQuoteFormData } from "@/lib/quotes/data";
 
-export const metadata: Metadata = { title: "Nueva cotización | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Nueva cotización | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function NewQuotePage({ searchParams }: PageProps<"/mi-cuenta/cotizaciones/nueva">) {
   const session = await requireSession();

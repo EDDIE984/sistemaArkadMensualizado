@@ -8,7 +8,7 @@ import { RegisterCancellationButton } from "@/components/channel/register-cancel
 import { requireChannelUser } from "@/lib/auth/session";
 import { getDbPool } from "@/lib/db/pool";
 
-export const metadata: Metadata = { title: "Cancelaciones del canal | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Cancelaciones del canal | Kuantiq", robots: { index: false, follow: false } };
 
 type Row = {
   id: string; cotizacion_id: string; numero_poliza: string; cliente: string; identificacion: string | null;

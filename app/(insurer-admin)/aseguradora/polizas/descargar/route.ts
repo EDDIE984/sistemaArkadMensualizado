@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const { policies, conditions, installments } = await getPoliciesForExport({ ...scope, insurerId: session.insurerId! }, filters);
 
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Kuantix";
+  workbook.creator = "Kuantiq";
   workbook.created = new Date();
   addSheet(workbook, "Pólizas", `Pólizas emitidas · ${dateLabel(filters.from)} – ${dateLabel(filters.to)}`, [
     { header: "Nº póliza", key: "policy", width: 12 }, { header: "Estado", key: "statusLabel", width: 11 },

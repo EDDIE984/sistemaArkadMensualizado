@@ -9,7 +9,7 @@ import { getDbPool } from "@/lib/db/pool";
 // Validar/guardar hasta 100 órdenes ejecuta el motor de cálculo por fila.
 export const maxDuration = 300;
 
-export const metadata: Metadata = { title: "Carga masiva de Órdenes de Emisión | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Carga masiva de Órdenes de Emisión | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function Page() {
   const s = await requireChannelUser();

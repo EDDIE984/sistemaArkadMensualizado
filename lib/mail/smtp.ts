@@ -19,7 +19,7 @@ export function getMailConfig() {
     user,
     password,
     fromEmail,
-    fromName: process.env.SMTP_FROM_NAME || "Kuantix",
+    fromName: process.env.SMTP_FROM_NAME || "Kuantiq",
   };
 }
 

@@ -6,7 +6,7 @@ import { OrderDetailView } from "@/components/policy/order-detail-view";
 import { requireInsurerAdmin } from "@/lib/auth/session";
 import { getOrderDetail } from "@/lib/policies/order-detail";
 
-export const metadata: Metadata = { title: "Detalle de la póliza | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Detalle de la póliza | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function Page({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ volver?: string }> }) {
   const session = await requireInsurerAdmin();

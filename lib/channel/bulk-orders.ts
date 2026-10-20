@@ -95,7 +95,7 @@ const TEAL = "FF02C7B3";
 
 export async function buildBulkTemplate(catalog: BulkCatalog) {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Kuantix";
+  wb.creator = "Kuantiq";
   wb.created = new Date();
 
   const sheet = wb.addWorksheet("Órdenes", { views: [{ state: "frozen", ySplit: 1 }] });

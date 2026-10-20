@@ -10,7 +10,7 @@ import { requireChannelUser } from "@/lib/auth/session";
 import { searchPendingOrderIds } from "@/lib/channel/order-search";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const metadata: Metadata = { title: "Órdenes de Emisión del canal | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Órdenes de Emisión del canal | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ q?: string; eliminada?: string; registradas?: string }> }) {
   const s = await requireChannelUser();

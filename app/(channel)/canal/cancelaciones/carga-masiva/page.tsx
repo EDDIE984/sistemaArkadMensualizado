@@ -8,7 +8,7 @@ import { requireChannelUser } from "@/lib/auth/session";
 // Validar/guardar hasta 100 cancelaciones consulta cada póliza.
 export const maxDuration = 300;
 
-export const metadata: Metadata = { title: "Cancelación masiva | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Cancelación masiva | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function Page() {
   await requireChannelUser();

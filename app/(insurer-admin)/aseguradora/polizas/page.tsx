@@ -11,7 +11,7 @@ import { requireInsurerAdmin } from "@/lib/auth/session";
 import { POLICY_STATES, getPolicies, policiesQuery, readPolicyFilters, type PolicyRow } from "@/lib/insurer/policies";
 import { resolveInsurerSummaryScope } from "@/lib/insurer/summary-scope";
 
-export const metadata: Metadata = { title: "Pólizas emitidas | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Pólizas emitidas | Kuantiq", robots: { index: false, follow: false } };
 
 const PAGE_SIZE = 50;
 const label = "text-[10px] font-bold uppercase tracking-wider text-ink-subtle";

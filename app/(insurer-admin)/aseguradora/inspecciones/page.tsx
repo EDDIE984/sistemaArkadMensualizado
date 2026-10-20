@@ -8,7 +8,7 @@ import { loadInspeccionesListForInsurer, type InspeccionFiltro } from "@/lib/ins
 import { CARROCERIA_LABELS } from "@/lib/inspeccion/slots";
 import { SEV_COLOR, SEVERIDAD_LABEL } from "@/lib/inspeccion/labels";
 
-export const metadata: Metadata = { title: "Inspecciones | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Inspecciones | Kuantiq", robots: { index: false, follow: false } };
 
 function rangoToFechas(rango: string | undefined): { desde: string | null; hasta: string | null } {
   const hoy = new Date();

@@ -7,7 +7,7 @@ import { requireInsurerAdmin } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getQuoteFormData } from "@/lib/quotes/data";
 
-export const metadata: Metadata = { title: "Recalcular cotización | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Recalcular cotización | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function RecalculateQuote({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireInsurerAdmin();

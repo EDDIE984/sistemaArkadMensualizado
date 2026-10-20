@@ -9,7 +9,7 @@ import { requireChannelUser } from "@/lib/auth/session";
 import { EXPIRY_OPTIONS, PERIOD_OPTIONS, getSummary, parseSummaryFilters } from "@/lib/channel/summary";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const metadata: Metadata = { title: "Resumen del canal | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Resumen del canal | Kuantiq", robots: { index: false, follow: false } };
 
 type SearchParams = { periodo?: string; desde?: string; hasta?: string; vence?: string; vdesde?: string; vhasta?: string };
 

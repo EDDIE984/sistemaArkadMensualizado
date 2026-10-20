@@ -8,7 +8,7 @@ import { requireChannelUser } from "@/lib/auth/session";
 import { getQuoteFormData } from "@/lib/quotes/data";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const metadata: Metadata = { title: "Editar Orden de Emisión | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Editar Orden de Emisión | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function Page({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ actualizada?: string }> }) {
   const session = await requireChannelUser();

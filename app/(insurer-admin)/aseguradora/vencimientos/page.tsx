@@ -10,7 +10,7 @@ import { monthLabel } from "@/lib/channel/month-label";
 import { addDays, expirationsQuery, getExpirations, readExpirationFilters, type ExpirationFilters, type ExpirationRow } from "@/lib/insurer/expirations";
 import { resolveInsurerSummaryScope } from "@/lib/insurer/summary-scope";
 
-export const metadata: Metadata = { title: "Vencimientos | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Vencimientos | Kuantiq", robots: { index: false, follow: false } };
 
 const PAGE_SIZE = 50;
 const label = "text-[10px] font-bold uppercase tracking-wider text-ink-subtle";

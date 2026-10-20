@@ -6,7 +6,7 @@ import { AdminPage } from "@/components/admin/admin-ui";
 import { requireInsurerAdmin } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const metadata: Metadata = { title: "Detalle del cálculo | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Detalle del cálculo | Kuantiq", robots: { index: false, follow: false } };
 
 type Amort = {
   mes: number;

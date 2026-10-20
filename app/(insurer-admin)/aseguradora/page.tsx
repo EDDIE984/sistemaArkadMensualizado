@@ -12,7 +12,7 @@ import { getCollections, type CollectionChannel } from "@/lib/insurer/collection
 import { resolveInsurerSummaryScope } from "@/lib/insurer/summary-scope";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const metadata: Metadata = { title: "Resumen de la aseguradora | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Resumen de la aseguradora | Kuantiq", robots: { index: false, follow: false } };
 
 type SearchParams = { periodo?: string | string[]; desde?: string | string[]; hasta?: string | string[]; vence?: string | string[]; vdesde?: string | string[]; vhasta?: string | string[]; canal?: string | string[]; productos?: string | string[] };
 const first = (value: string | string[] | undefined) => typeof value === "string" ? value : undefined;

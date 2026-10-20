@@ -2,7 +2,7 @@ import Link from "next/link";
 import { FileText, LogOut, Plus, UserRound } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { MobileNavigationMenu } from "@/components/internal/mobile-navigation-menu";
-import { KuantixLogo } from "@/components/brand/kuantix-logo";
+import { KuantiqLogo } from "@/components/brand/kuantiq-logo";
 import type { AppSession } from "@/lib/auth/session";
 
 export function InternalHeader({ session }: { session: AppSession }) {
@@ -10,7 +10,7 @@ export function InternalHeader({ session }: { session: AppSession }) {
     <header className="relative z-20 border-b border-line bg-surface-muted backdrop-blur-md">
       <div className="mx-auto flex min-h-16 w-full max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-7 lg:px-10">
         <Link href="/mi-cuenta" className="flex min-h-11 items-center gap-2.5 font-bold text-ink">
-          <KuantixLogo className="h-9 w-auto" />
+          <KuantiqLogo className="h-9 w-auto" />
         </Link>
         <nav className="hidden items-center gap-2 md:flex" aria-label="Navegación de cuenta">
           <Link href="/mi-cuenta" className="inline-flex min-h-11 items-center rounded-full px-4 text-sm font-semibold text-ink/80 transition-colors hover:bg-ink/5 hover:text-ink">Resumen</Link>

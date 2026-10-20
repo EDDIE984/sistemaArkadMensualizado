@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   const fmt = (iso: string) => iso.split("-").reverse().join("/");
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Kuantix";
+  wb.creator = "Kuantiq";
   wb.created = new Date();
 
   addSheet(wb, "Producción del período", `Cuotas que vencen en el período · ${fmt(f.period.from)} – ${fmt(f.period.to)}`, [

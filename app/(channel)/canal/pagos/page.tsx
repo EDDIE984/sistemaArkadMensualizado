@@ -9,7 +9,7 @@ import { getDbPool } from "@/lib/db/pool";
 import { blockedSql, payableSql, paymentScope } from "@/lib/payments/queries";
 import { paymentFiltersSchema, type PaymentRow, type PaymentSummary } from "@/lib/payments/types";
 
-export const metadata: Metadata = { title: "Pagos del canal | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Pagos del canal | Kuantiq", robots: { index: false, follow: false } };
 const PAGE_SIZE = 50;
 const field = "min-h-11 w-full rounded-xl border border-line bg-white px-3 text-sm outline-none focus:border-brand";
 type Params = { from?: string; to?: string; products?: string | string[]; status?: string; page?: string };

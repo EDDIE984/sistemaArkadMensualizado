@@ -10,7 +10,7 @@ import {
 } from "@/lib/inspeccion/data";
 import { InspeccionRevision } from "@/components/insurer/inspeccion-revision";
 
-export const metadata: Metadata = { title: "Revisión de inspección | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Revisión de inspección | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function InspeccionRevisionPage({ params }: PageProps<"/aseguradora/inspecciones/[id]">) {
   const session = await requireInsurerAdmin();

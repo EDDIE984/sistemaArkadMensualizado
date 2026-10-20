@@ -46,7 +46,7 @@ const TEAL = "FF02C7B3";
 
 export async function buildCancellationTemplate(products: { name: string }[]) {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Kuantix";
+  wb.creator = "Kuantiq";
   wb.created = new Date();
   const sheet = wb.addWorksheet("Cancelaciones", { views: [{ state: "frozen", ySplit: 1 }] });
   const info = wb.addWorksheet("Instrucciones");

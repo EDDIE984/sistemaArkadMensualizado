@@ -10,7 +10,7 @@ import { getDbPool } from "@/lib/db/pool";
 import { isCarroceria, requiredSlots } from "@/lib/inspeccion/slots";
 import { resolveInsurerSummaryScope } from "@/lib/insurer/summary-scope";
 
-export const metadata: Metadata = { title: "Pendientes de emisión | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Pendientes de emisión | Kuantiq", robots: { index: false, follow: false } };
 
 type PendingRow = {
   id: string;

@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     getCollections(scope, filters.period),
   ]);
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Kuantix";
+  workbook.creator = "Kuantiq";
   workbook.created = new Date();
 
   addSheet(workbook, "Producción del período", `Cuotas que vencen en el período · ${dateLabel(filters.period.from)} – ${dateLabel(filters.period.to)}`, [

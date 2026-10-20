@@ -5,7 +5,7 @@ import { PasswordResetForm } from "@/components/auth/password-reset-form";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashOpaqueToken } from "@/lib/auth/crypto";
 
-export const metadata: Metadata = { title: "Restablecer contraseña | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Restablecer contraseña | Kuantiq", robots: { index: false, follow: false } };
 
 export default async function PasswordResetPage({ searchParams }: PageProps<"/restablecer-contrasena">) {
   const params = await searchParams;

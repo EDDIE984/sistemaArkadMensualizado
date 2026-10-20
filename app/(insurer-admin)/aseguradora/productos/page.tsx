@@ -7,7 +7,7 @@ import { toggleProduct } from "@/app/actions/insurer";
 import { requireInsurerAdmin } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const metadata: Metadata = { title: "Productos | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Productos | Kuantiq", robots: { index: false, follow: false } };
 
 type SearchParams = { canal?: string | string[]; nuevoCanal?: string | string[] };
 const one = (value: string | string[] | undefined) => typeof value === "string" ? value : undefined;

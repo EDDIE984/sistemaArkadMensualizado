@@ -9,7 +9,7 @@ import { requireChannelUser } from "@/lib/auth/session";
 import { getDbPool } from "@/lib/db/pool";
 import { ORDER_SEARCH_LIMIT, searchActivePolicies } from "@/lib/channel/order-search";
 
-export const metadata: Metadata = { title: "Cancelación individual | Kuantix", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Cancelación individual | Kuantiq", robots: { index: false, follow: false } };
 
 type Policy = {
   id: string; numero_poliza: string; estado: string; fecha_emision: string; inicio: string; fin: string;

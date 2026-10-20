@@ -334,7 +334,7 @@ el mismo vehículo y líneas de la versión oscura, redibujados en trazos navy/t
 sobre blanco. El PNG oscuro original (`internal-app-background.png`) se conserva
 solo como fuente.
 
-Paleta (tomada del logotipo Kuantix, tokens en `app/globals.css`):
+Paleta (tomada del logotipo Kuantiq, tokens en `app/globals.css`):
 
 | Token Tailwind | Valor | Uso |
 |---|---|---|
@@ -355,7 +355,7 @@ ni fondos `#061323`/`#071426` en pantallas internas.
 Reglas obligatorias:
 
 - La marca visible en el encabezado compartido de todas las pantallas internas
-  autenticadas es **Kuantix**, representada por su logotipo (`components/brand/kuantix-logo.tsx`). No se
+  autenticadas es **Kuantiq**, representada por su logotipo (`components/brand/kuantiq-logo.tsx`). No se
   debe mostrar “Confia” en esta posición. Esta regla se limita al encabezado
   interno y no implica reemplazar automáticamente otros textos comerciales,
   legales o metadatos de la aplicación.
